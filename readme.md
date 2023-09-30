@@ -1,5 +1,10 @@
 # Bun and Node.js Docker Images: Optimize Your Development Workflow 🐇 🐳 🐢 🚀
 
+[![dockeri.co](https://dockerico.blankenship.io/image/imbios/bun-node)](https://hub.docker.com/r/imbios/bun-node)
+
+[![GitHub issues](https://img.shields.io/github/issues/ImBIOS/bun-node.svg "GitHub issues")](https://github.com/ImBIOS/bun-node)
+[![GitHub stars](https://img.shields.io/github/stars/ImBIOS/bun-node.svg "GitHub stars")](https://github.com/ImBIOS/bun-node)
+
 This repository offers pre-configured Docker images combining [Bun](https://bun.sh/), with [Node.js](https://nodejs.org/), the popular JavaScript runtime. Ideal for development, testing, and production environments.
 
 ## Features
