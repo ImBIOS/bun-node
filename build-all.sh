@@ -2,9 +2,12 @@
 
 registry="imbios"
 
+# Platforms
+platforms="linux/amd64,linux/arm64"
+
 # Versions and types
 versions=("16" "18" "20")
-types=("alpine" "debian" "debian-slim")
+types=("alpine" "debian-slim" "debian")
 
 # Login to Docker Hub
 docker login --username=$registry
@@ -17,10 +20,12 @@ for version in "${versions[@]}"; do
       tag_type="slim"
     fi
 
-    # Build image
-    docker build -t "${registry}/bun-node:${version}-${tag_type}" "./${version}/${type}"
+    # Build multi-platform image
+    docker buildx build --platform $platforms -t "${registry}/bun-node:${version}-${tag_type}" "./${version}/${type}" --push
 
-    # Push image to registry
-    docker push "${registry}/bun-node:${version}-${tag_type}"
+    # If version is last and type is last, tag as latest
+    if [ "$version" == "${versions[-1]}" ] && [ "$type" == "${types[-1]}" ]; then
+      docker buildx build --platform $platforms -t "${registry}/bun-node:latest" "./${version}/${type}" --push
+    fi
   done
 done
