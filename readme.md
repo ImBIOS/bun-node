@@ -7,6 +7,8 @@
 
 This repository offers pre-configured Docker images combining [Bun](https://bun.sh/), with [Node.js](https://nodejs.org/), the popular JavaScript runtime. Ideal for development, testing, and production environments.
 
+Use node.js as runtime, and bun as package manager, etc. The node.js in this docker image functions as fallback when bun is not implement the feature yet.
+
 ## Features
 
 - **Multiple Node.js Versions**: Supports Node.js 16, 18, 20
