@@ -33,22 +33,6 @@ jobs:
         id: bun
         run: ./check-new-release.sh oven-sh/bun bun
 
-      - name: Commit changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add last_bun.txt last_nodejs.txt
-          git diff-index --quiet HEAD || git commit -m "build: update versions"
-      - name: Pull changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
-        run: git pull -r
-      - name: Push changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Setup Docker Buildx
         if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         uses: docker/setup-buildx-action@v3
@@ -68,3 +52,19 @@ jobs:
           PLATFORMS: ${{ env.PLATFORMS }}
           VERSIONS: ${{ env.VERSIONS }}
           TYPES: ${{ env.TYPES }}
+
+      - name: Commit changes
+        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add last_bun.txt last_nodejs.txt
+          git diff-index --quiet HEAD || git commit -m "build: update versions"
+      - name: Pull changes
+        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
+        run: git pull -r
+      - name: Push changes
+        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
