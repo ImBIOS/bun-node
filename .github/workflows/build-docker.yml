@@ -27,41 +27,42 @@ jobs:
         run: sudo apt-get install jq
 
       - name: Check for new releases in nodejs/node
+        id: nodejs
         run: ./check-new-release.sh nodejs/node nodejs
 
       - name: Check for new releases in oven-sh/bun
+        id: bun
         run: ./check-new-release.sh oven-sh/bun bun
 
-      - name: Determine if any new releases
-        if: env.nodejs-new-release == 'true' || env.bun-new-release == 'true'
-        run: echo "any-new-release=$(if [[ '${{ env.nodejs-new-release }}' == 'true' || '${{ env.bun-new-release }}' == 'true' ]]; then echo 'true'; else echo 'false'; fi)" >> "$GITHUB_ENV"
-
       - name: Commit changes
+        if: steps.nodejs.outputs || steps.bun.outputs
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add -A
           git diff-index --quiet HEAD || git commit -m "build: update versions"
       - name: Pull changes
+        if: steps.nodejs.outputs || steps.bun.outputs
         run: git pull -r
       - name: Push changes
+        if: steps.nodejs.outputs || steps.bun.outputs
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker Buildx
-        if: env.any-new-release == 'true'
+        if: steps.nodejs.outputs || steps.bun.outputs
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        if: env.any-new-release == 'true'
+        if: steps.nodejs.outputs || steps.bun.outputs
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker images
-        if: env.any-new-release == 'true'
+        if: steps.nodejs.outputs || steps.bun.outputs
         run: ./build-all.sh
         env:
           REGISTRY: ${{ env.REGISTRY }}

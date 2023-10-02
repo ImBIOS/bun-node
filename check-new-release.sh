@@ -7,9 +7,8 @@ curl -s https://api.github.com/repos/$REPO/releases/latest | jq -r '.tag_name' >
 
 if [[ -f last_$FILE.txt && $(cat last_$FILE.txt) != $(cat latest_$FILE.txt) ]]; then
   echo "New version found for $FILE."
-  echo "new-release=true" >>"$GITHUB_ENV"
+  cat latest_$FILE.txt >last_$FILE.txt
+  return true
 else
-  echo "new-release=false" >>"$GITHUB_ENV"
+  return false
 fi
-
-cat latest_$FILE.txt >last_$FILE.txt
