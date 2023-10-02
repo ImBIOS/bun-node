@@ -10,6 +10,7 @@ env:
   PLATFORMS: linux/amd64,linux/arm64
   VERSIONS: 16,18,20
   TYPES: alpine,debian-slim,debian
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   check-and-build:
