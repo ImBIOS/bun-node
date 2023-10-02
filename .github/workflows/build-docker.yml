@@ -32,13 +32,13 @@ jobs:
           curl -s https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name' > latest_nodejs.txt
           if [[ -f last_nodejs.txt && $(cat last_nodejs.txt) != $(cat latest_nodejs.txt) ]]; then
             echo "New NodeJS version found."
-            echo "new-release=true" >> $GITHUB_ENV
+            echo "new-release=true" >> "$GITHUB_ENV"
             cat latest_nodejs.txt > last_nodejs.txt
           else
-            echo "new-release=false" >> $GITHUB_ENV
+            echo "new-release=false" >> "$GITHUB_ENV"
             cat latest_nodejs.txt > last_nodejs.txt
           fi
-          echo "nodejs-new-release=${{ env.new-release }}" >> $GITHUB_ENV
+          echo "nodejs-new-release=${{ env.new-release }}" >> "$GITHUB_ENV"
 
       - name: Check for new releases in oven-sh/bun
         id: bun
@@ -47,17 +47,17 @@ jobs:
           curl -s https://api.github.com/repos/oven-sh/bun/releases/latest | jq -r '.tag_name' > latest_bun.txt
           if [[ -f last_bun.txt && $(cat last_bun.txt) != $(cat latest_bun.txt) ]]; then
             echo "New Bun version found."
-            echo "new-release=true" >> $GITHUB_ENV
+            echo "new-release=true" >> "$GITHUB_ENV"
             cat latest_bun.txt > last_bun.txt
           else
-            echo "new-release=false" >> $GITHUB_ENV
+            echo "new-release=false" >> "$GITHUB_ENV"
             cat latest_bun.txt > last_bun.txt
           fi
-          echo "bun-new-release=${{ env.new-release }}" >> $GITHUB_ENV
+          echo "bun-new-release=${{ env.new-release }}" >> "$GITHUB_ENV"
 
       - name: Determine if any new releases
         if: env.nodejs-new-release == 'true' || env.bun-new-release == 'true'
-        run: echo "any-new-release=$(if [[ '${{ env.nodejs-new-release }}' == 'true' || '${{ env.bun-new-release }}' == 'true' ]]; then echo 'true'; else echo 'false'; fi)" >> $GITHUB_ENV
+        run: echo "any-new-release=$(if [[ '${{ env.nodejs-new-release }}' == 'true' || '${{ env.bun-new-release }}' == 'true' ]]; then echo 'true'; else echo 'false'; fi)" >> "$GITHUB_ENV"
 
       # Cache versions regardless of whether a new release is found
       - name: Cache versions
