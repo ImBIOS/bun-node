@@ -30,6 +30,7 @@ jobs:
         run: ./check-new-release.sh nodejs/node nodejs
 
       - name: Check for new releases in oven-sh/bun
+        if: env.nodejs-new-release == 'false'
         run: ./check-new-release.sh oven-sh/bun bun
 
       - name: Determine if any new releases
