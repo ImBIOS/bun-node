@@ -25,7 +25,10 @@ jobs:
       - name: Check for new releases in nodejs/docker-node
         id: nodejs
         run: |
-          curl -s https://api.github.com/repos/nodejs/docker-node/releases/latest | jq -r '.tag_name' > latest_nodejs.txt
+          gh api \
+          -H "Accept: application/vnd.github+json" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          /repos/nodejs/docker-node/releases/latest | jq -r '.tag_name' > latest_nodejs.txt
           if [[ -f last_nodejs.txt && $(cat last_nodejs.txt) != $(cat latest_nodejs.txt) ]]; then
             echo "New NodeJS version found."
             echo "new-release=true" >> $GITHUB_ENV
@@ -38,7 +41,7 @@ jobs:
 
       - name: Check for new releases in oven-sh/bun
         id: bun
-        if: env.nodejs-new-release == 'false'
+        if: env.nodejs-new-release == 'true'
         run: |
           curl -s https://api.github.com/repos/oven-sh/bun/releases/latest | jq -r '.tag_name' > latest_bun.txt
           if [[ -f last_bun.txt && $(cat last_bun.txt) != $(cat latest_bun.txt) ]]; then
@@ -52,6 +55,7 @@ jobs:
           echo "bun-new-release=${{ env.new-release }}" >> $GITHUB_ENV
 
       - name: Determine if any new releases
+        if: env.nodejs-new-release == 'true' || env.bun-new-release == 'true'
         run: echo "any-new-release=$(if [[ '${{ env.nodejs-new-release }}' == 'true' || '${{ env.bun-new-release }}' == 'true' ]]; then echo 'true'; else echo 'false'; fi)" >> $GITHUB_ENV
 
       # Cache versions regardless of whether a new release is found
