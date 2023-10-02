@@ -27,10 +27,10 @@ jobs:
         run: sudo apt-get install jq
 
       - name: Check for new releases in nodejs/node
-        run: ./check_new_release.sh nodejs/node nodejs
+        run: ./check-new-release.sh nodejs/node nodejs
 
       - name: Check for new releases in oven-sh/bun
-        run: ./check_new_release.sh oven-sh/bun bun
+        run: ./check-new-release.sh oven-sh/bun bun
 
       - name: Determine if any new releases
         if: env.nodejs-new-release == 'true' || env.bun-new-release == 'true'
