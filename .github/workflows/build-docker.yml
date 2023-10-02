@@ -39,7 +39,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add -A
+          git add last_bun.txt last_nodejs.txt
           git diff-index --quiet HEAD || git commit -m "build: update versions"
       - name: Pull changes
         if: steps.nodejs.outputs || steps.bun.outputs
