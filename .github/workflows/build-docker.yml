@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
+  # For debug and development only
+  push:
+    branches:
+      - main
 
 env:
   REGISTRY: imbios
