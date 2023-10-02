@@ -38,6 +38,7 @@ jobs:
 
       - name: Check for new releases in oven-sh/bun
         id: bun
+        if: env.nodejs-new-release == 'false'
         run: |
           curl -s https://api.github.com/repos/oven-sh/bun/releases/latest | jq -r '.tag_name' > latest_bun.txt
           if [[ -f last_bun.txt && $(cat last_bun.txt) != $(cat latest_bun.txt) ]]; then
