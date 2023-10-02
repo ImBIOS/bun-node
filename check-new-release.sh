@@ -8,8 +8,8 @@ curl -s https://api.github.com/repos/$REPO/releases/latest | jq -r '.tag_name' >
 if [[ -f last_$FILE.txt && $(cat last_$FILE.txt) != $(cat latest_$FILE.txt) ]]; then
   echo "New version found for $FILE."
   cat latest_$FILE.txt >last_$FILE.txt
-  echo "is-out-of-date=true" >>"$GITHUB_OUTPUT"
+  echo "$FILE-is-out-of-date=true" >>"$GITHUB_ENV"
 else
   echo "No new version found for $FILE."
-  echo "is-out-of-date=false" >>"$GITHUB_OUTPUT"
+  echo "$FILE-is-out-of-date=false" >>"$GITHUB_ENV"
 fi
