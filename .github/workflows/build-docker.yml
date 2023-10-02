@@ -34,21 +34,22 @@ jobs:
         id: bun
         run: ./check-new-release.sh oven-sh/bun bun
 
-      - name: Commit changes
-        if: steps.nodejs.outputs || steps.bun.outputs
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add last_bun.txt last_nodejs.txt
-          git diff-index --quiet HEAD || git commit -m "build: update versions"
-      - name: Pull changes
-        if: steps.nodejs.outputs || steps.bun.outputs
-        run: git pull -r
-      - name: Push changes
-        if: steps.nodejs.outputs || steps.bun.outputs
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+        # TODO: For debug and development only
+      # - name: Commit changes
+      #   if: steps.nodejs.outputs || steps.bun.outputs
+      #   run: |
+      #     git config --local user.email "github-actions[bot]@users.noreply.github.com"
+      #     git config --local user.name "github-actions[bot]"
+      #     git add last_bun.txt last_nodejs.txt
+      #     git diff-index --quiet HEAD || git commit -m "build: update versions"
+      # - name: Pull changes
+      #   if: steps.nodejs.outputs || steps.bun.outputs
+      #   run: git pull -r
+      # - name: Push changes
+      #   if: steps.nodejs.outputs || steps.bun.outputs
+      #   uses: ad-m/github-push-action@master
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker Buildx
         if: steps.nodejs.outputs || steps.bun.outputs
