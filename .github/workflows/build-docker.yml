@@ -30,7 +30,6 @@ jobs:
         run: ./check-new-release.sh nodejs/node nodejs
 
       - name: Check for new releases in oven-sh/bun
-        if: env.nodejs-new-release == 'false'
         run: ./check-new-release.sh oven-sh/bun bun
 
       - name: Determine if any new releases
@@ -42,7 +41,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add -A
-          git diff-index --quiet HEAD || git commit -m "Update blog posts"
+          git diff-index --quiet HEAD || git commit -m "build: update versions"
       - name: Pull changes
         run: git pull -r
       - name: Push changes
