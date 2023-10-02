@@ -37,13 +37,18 @@ jobs:
         if: env.nodejs-new-release == 'true' || env.bun-new-release == 'true'
         run: echo "any-new-release=$(if [[ '${{ env.nodejs-new-release }}' == 'true' || '${{ env.bun-new-release }}' == 'true' ]]; then echo 'true'; else echo 'false'; fi)" >> "$GITHUB_ENV"
 
-      - name: Commit version files
+      - name: Commit changes
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add last_nodejs.txt last_bun.txt
-          git commit -m "Update version files" || echo "No changes to commit"
-          git push
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git diff-index --quiet HEAD || git commit -m "Update blog posts"
+      - name: Pull changes
+        run: git pull -r
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker Buildx
         if: env.any-new-release == 'true'
