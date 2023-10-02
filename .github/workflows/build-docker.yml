@@ -4,17 +4,12 @@ on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
-  # For debug and development only
-  push:
-    branches:
-      - main
 
 env:
   REGISTRY: imbios
   PLATFORMS: linux/amd64,linux/arm64
   VERSIONS: 16,18,20
   TYPES: alpine,debian-slim,debian
-  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   check-and-build:
@@ -30,10 +25,7 @@ jobs:
       - name: Check for new releases in nodejs/docker-node
         id: nodejs
         run: |
-          gh api \
-          -H "Accept: application/vnd.github+json" \
-          -H "X-GitHub-Api-Version: 2022-11-28" \
-          /repos/nodejs/node/releases/latest | jq -r '.tag_name' > latest_nodejs.txt
+          curl -s https://api.github.com/repos/nodejs/node/releases/latest | jq -r '.tag_name' > latest_nodejs.txt
           if [[ -f last_nodejs.txt && $(cat last_nodejs.txt) != $(cat latest_nodejs.txt) ]]; then
             echo "New NodeJS version found."
             echo "new-release=true" >> $GITHUB_ENV
