@@ -1,0 +1,13 @@
+{
+  "bun": {
+    "latest": "1.0.8",
+    "canary": "1.0.8-canary.20231104.1"
+  },
+  "nodejs": {
+    "current": "21.1.0",
+    "lts-iron": "20.9.0",
+    "lts-hydrogen": "18.18.2",
+    "lts-gallium": "16.20.2",
+    "lts-fermium": "14.21.3"
+  }
+}

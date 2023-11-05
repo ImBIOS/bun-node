@@ -1,14 +1,24 @@
-name: Check for new releases and build Docker images
+name: Release
 
 on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
+    inputs:
+      bun-version:
+        description: "Bun version"
+        required: false
+        default: ""
+      nodejs-version:
+        description: "Node.js version"
+        required: false
+        default: ""
 
 env:
   REGISTRY: imbios
   PLATFORMS: linux/amd64,linux/arm64
-  NODE_VERSIONS: 16,18,20
+  NODE_VERSIONS: 14,16,18,20,21
+  BUN_TAGS: canary,latest
   DISTROS: alpine,debian-slim,debian
 
   nodejs-is-out-of-date: false
@@ -53,7 +63,7 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           PLATFORMS: ${{ env.PLATFORMS }}
           NODE_VERSIONS: ${{ env.NODE_VERSIONS }}
-          BUN_VERSIONS: ${{ env.BUN_VERSIONS }}
+          BUN_TAGS: ${{ env.BUN_TAGS }}
           DISTROS: ${{ env.DISTROS }}
 
       - name: Commit changes
