@@ -5,9 +5,9 @@
   },
   "nodejs": {
     "current": "21.1.0",
-    "lts-iron": "20.9.0",
-    "lts-hydrogen": "18.18.2",
-    "lts-gallium": "16.20.2",
-    "lts-fermium": "14.21.3"
+    "iron": "20.9.0",
+    "hydrogen": "18.18.2",
+    "gallium": "16.20.2",
+    "fermium": "14.21.3"
   }
 }

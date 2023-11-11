@@ -1,3 +1,4 @@
+# TODO: Make this script more generic, configurable, and only build what's needed
 #!/bin/bash
 
 # Convert comma-separated strings to arrays
