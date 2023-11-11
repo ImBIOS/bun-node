@@ -26,6 +26,10 @@ docker pull imbios/bun-node
 - **debian**: Standard build, balanced between size and features
 - **slim**: Debian-based but lighter, stripped of unnecessary files
 
+## Show Your Support 🌟
+
+If you find this Docker image useful, please consider giving it a star on GitHub! Your support encourages me to keep maintaining and improving it.
+
 ## Contribution
 
 Feel free to contribute by submitting pull requests or by reporting issues.
