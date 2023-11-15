@@ -5,12 +5,16 @@ on:
     - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
     inputs:
-      bun-version:
-        description: "Bun version"
+      bun-versions:
+        description: "Bun version, comma separated (e.g. 0.0.1,0.0.2)"
         required: false
         default: ""
       nodejs-version:
-        description: "Node.js version"
+        description: "Node.js version, comma separated (e.g. 14,16.3,18.4.5)"
+        required: false
+        default: ""
+      distros:
+        description: "Distro, comma separated (e.g. alpine,debian-slim,debian)"
         required: false
         default: ""
 
