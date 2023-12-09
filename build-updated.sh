@@ -104,18 +104,16 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
         tag_distro="slim"
       fi
 
+      # Generate tags
+      tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
+
       # Building the image
       node_major=${node_version%%.*}
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
-      docker buildx build --platform "$PLATFORMS" -t "$image_name" "./src/${node_major}/${distro}"
-
-      # Generate tags
-      tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
-        docker tag "$image_name" "$tag"
-        docker push "$tag"
+        docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/${node_major}/${distro}" --push
       done
 
       # On success, update the versions.json file
@@ -125,7 +123,6 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
         bun_tag="canary"
       fi
       json_data=$(echo "${json_data}" | jq ".nodejs.\"${node_major}\".version = \"v${node_version}\"" | jq ".bun.\"${bun_tag}\" = \"v${bun_version}\"")
-      log "Updated JSON data: ${json_data}"
       echo "${json_data}" >versions.json
     done
   done
