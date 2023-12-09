@@ -1,53 +1,55 @@
 #!/bin/bash
 
-# File to store last built versions
-LAST_BUILT_FILE="versions.json"
+# Exit on error
+set -e
 
-# Function to check if a version is in the JSON array
-version_in_json() {
-  local version=$1
-  local type=$2
-  local versions=$(jq -r ".$type.$version" "$LAST_BUILT_FILE")
-  [[ "$versions" == "null" ]] && return 1 || return 0
+# Logging function
+log() {
+  echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')] $@"
 }
 
-# Function to update JSON file
-update_json() {
-  local type=$1
-  local version=$2
-  local tag=$3
-  jq ".$type.$version = \"$tag\"" "$LAST_BUILT_FILE" > temp.json && mv temp.json "$LAST_BUILT_FILE"
+# Function to validate version format
+validate_version() {
+  local version=$1
+  local regex="^[0-9]+\.[0-9]+\.[0-9]+(-canary\.[0-9]{8}\.[0-9]+)?$"
+  if [[ ! $version =~ $regex ]]; then
+    echo "Invalid version format: $version"
+    exit 1
+  fi
 }
 
 # Convert comma-separated strings to arrays
-IFS=',' read -ra node_versions <<<"$NODE_VERSIONS_TO_BUILD"
-IFS=',' read -ra bun_tags <<<"$BUN_TAGS_TO_BUILD"
-IFS=',' read -ra distros <<<"$DISTROS"
+IFS=',' read -ra NODE_VERSIONS <<<"$NODE_VERSIONS_TO_BUILD"
+IFS=',' read -ra BUN_VERSIONS <<<"$BUN_VERSIONS_TO_BUILD"
+IFS=',' read -ra DISTROS <<<"$DISTROS"
 
-# Check if LAST_BUILT_FILE exists
-if [ ! -f "$LAST_BUILT_FILE" ]; then
-  echo "{}" > $LAST_BUILT_FILE
-fi
+# Validate versions
+for version in "${NODE_VERSIONS[@]}"; do
+  validate_version "$version"
+done
+for version in "${BUN_VERSIONS[@]}"; do
+  validate_version "$version"
+done
 
 # Build, tag, and push loop
-for bun_tag in "${bun_tags[@]}"; do
-  for node_version in "${node_versions[@]}"; do
-    if ! version_in_json "$node_version" "nodejs" || ! version_in_json "$bun_tag" "bun"; then
-      for distro in "${distros[@]}"; do
-        distro_tag=$distro
-        if [ "$distro" == "debian-slim" ]; then
-          distro_tag="slim"
-        fi
+for node_version in "${NODE_VERSIONS[@]}"; do
+  for bun_version in "${BUN_VERSIONS[@]}"; do
+    for distro in "${DISTROS[@]}"; do
+      tag_distro=$distro
+      if [ "$distro" == "debian-slim" ]; then
+        tag_distro="slim"
+      fi
 
-        docker buildx build --platform $PLATFORMS --build-arg BUN_VERSION="$bun_tag" -t "$REGISTRY/bun-node:${bun_tag}-${node_version}-${distro_tag}" "./${version}/${distro}" --push
+      # Building the image
+      log "Building image for Node version $node_version, Bun version $bun_version, Distro $distro"
+      log "$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}"
+      # docker buildx build --platform "$PLATFORMS" -t "$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}" "./${node_version}/${distro}" --push
 
-        if [ "$node_version" == "${node_versions[-1]}" ] && [ "$distro" == "${distros[-1]}" ]; then
-          docker buildx build --platform $PLATFORMS -t "$REGISTRY/bun-node:latest" "./${node_version}/${distro}" --push
-        fi
-      done
-      # Update JSON file
-      update_json "nodejs" "$node_version" "$node_version"
-      update_json "bun" "$bun_tag" "$bun_tag"
-    fi
+      # Tagging the node latest lts, bun latest, and distro debian as latest
+      if [[ "$node_version" == "21" && "$bun_version" == "latest" && "$distro" == "debian" ]]; then
+        log "Tagging the latest version"
+        # docker buildx build --platform "$PLATFORMS" -t "$REGISTRY/bun-node:latest" "./${node_version}/${distro}" --push
+      fi
+    done
   done
 done
