@@ -123,7 +123,6 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
         bun_tag="canary"
       fi
       json_data=$(echo "${json_data}" | jq ".nodejs.\"${node_major}\".version = \"v${node_version}\"" | jq ".bun.\"${bun_tag}\" = \"v${bun_version}\"")
-      log "Updated JSON data: ${json_data}"
       echo "${json_data}" >versions.json
     done
   done
