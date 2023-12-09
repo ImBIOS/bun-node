@@ -105,9 +105,10 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       fi
 
       # Building the image
+      node_major=${node_version%%.*}
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
-      docker buildx build --platform "$PLATFORMS" -t "$image_name" "./${node_version}/${distro}" --push
+      docker buildx build --platform "$PLATFORMS" -t "$image_name" "./src/${node_major}/${distro}" --push
 
       # Generate tags
       tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
@@ -119,7 +120,6 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
 
       # On success, update the versions.json file
       log "Updating versions.json file"
-      node_major=${node_version%%.*}
       bun_tag="latest"
       if [[ $bun_version == *"-canary"* ]]; then
         bun_tag="canary"
