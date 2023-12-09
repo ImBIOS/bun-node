@@ -6,23 +6,23 @@
   "nodejs": {
     "21": {
       "name": "current",
-      "version": "21.1.0"
+      "version": "v21.1.0"
     },
     "20": {
       "name": "iron",
-      "version": "20.9.0"
+      "version": "v20.9.0"
     },
     "18": {
       "name": "hydrogen",
-      "version": "18.18.2"
+      "version": "v18.18.2"
     },
     "16": {
       "name": "gallium",
-      "version": "16.20.2"
+      "version": "v16.20.1"
     },
     "14": {
       "name": "fermium",
-      "version": "14.21.3"
+      "version": "v14.21.2"
     }
   }
 }

@@ -3,25 +3,23 @@ Fetches the latest Bun version based on the version type specified as a command-
 """
 
 import argparse
+import json
+import os
 import requests
 from bs4 import BeautifulSoup
 from packaging import version
 
 
-def get_bun_latest_versions(version_type):
+def get_bun_latest_versions(version_types):
     """
-    Fetches the latest Bun version based on the version type from the Bun NPM page.
+    Fetches the latest Bun version(s) based on the version types from the Bun NPM page.
 
     Args:
-      version_type (str): The type of version to fetch.
-      Possible values are "latest", "canary", or "both".
+      version_types (list): The types of versions to fetch.
 
     Returns:
-      str or dict: The latest Bun version(s) based on the version type.
-      If version_type is "latest", returns a string.
-      If version_type is "canary", returns a string. If version_type is "both",
-      returns a dictionary with keys "latest"
-      and "canary" and their corresponding values as strings.
+      dict: A dictionary with keys as version types and their
+      corresponding latest versions as values.
     """
     url = "https://www.npmjs.com/package/bun?activeTab=versions"
     response = requests.get(url, timeout=5)
@@ -32,62 +30,67 @@ def get_bun_latest_versions(version_type):
     version_list = [version.get_text().strip() for version in versions]
 
     # Get the latest versions
-    latest_latest = None
-    latest_canary = None
+    latest_versions = {"latest": None, "canary": None}
 
     for version_str in version_list:
         # Split the version string at the first hyphen
         version_parts = version_str.split("-", 1)
         parsed_version = version.parse(version_parts[0])
 
-        if "canary" in version_str:
-            if latest_canary is None or parsed_version > version.parse(
-                latest_canary.split("-", 1)[0]
+        if "canary" in version_str and "canary" in version_types:
+            if latest_versions["canary"] is None or parsed_version > version.parse(
+                latest_versions["canary"].split("-", 1)[0]
             ):
-                latest_canary = version_str
-        else:
-            if latest_latest is None or parsed_version > version.parse(
-                latest_latest.split("-", 1)[0]
+                latest_versions["canary"] = version_str
+        elif "canary" not in version_str and "latest" in version_types:
+            if latest_versions["latest"] is None or parsed_version > version.parse(
+                latest_versions["latest"].split("-", 1)[0]
             ):
-                latest_latest = version_str
+                latest_versions["latest"] = version_str
 
-    # Filter based on version type
-    if version_type == "latest":
-        return latest_latest
-    if version_type == "canary":
-        return latest_canary
-    if version_type == "both":
-        return {"latest": latest_latest, "canary": latest_canary}
+    # Return filtered results
+    return {k: v for k, v in latest_versions.items() if k in version_types}
 
 
 def main():
     """
-    Fetches the latest Bun version based on the version type specified as a command-line argument.
+    Fetches the latest Bun version(s) based on the version
+    types specified as a command-line argument.
 
     Command-line Arguments:
-      --version-type (str): The type of version to fetch.
-      Possible values are "latest", "canary", or "both".
-                  Defaults to "both".
-
-    Prints:
-      The latest Bun version(s) based on the version type.
+      version_type (str): Comma-separated list of version types to fetch.
+      Possible values are "latest", "canary".
     """
     parser = argparse.ArgumentParser(
-        description="Fetch the latest Bun version based on version type."
+        description="Fetch the latest Bun version(s) based on version types."
     )
     parser.add_argument(
-        "--version-type",
+        "version_type",
         type=str,
-        choices=["latest", "canary", "both"],
-        default="both",
-        help="Version type to fetch: latest, canary, or both",
+        default="latest,canary",
+        help="Comma-separated list of version types to fetch: latest, canary",
     )
 
     args = parser.parse_args()
 
+    # Convert comma-separated string to list
+    version_types = args.version_type.split(",")
+
     # Get the latest Bun version(s)
-    latest_versions = get_bun_latest_versions(args.version_type)
-    print(latest_versions)
+    latest_versions = get_bun_latest_versions(version_types)
+
+    # Read current versions from versions.json
+    with open("versions.json", encoding="utf-8") as f:
+        current_versions = json.load(f)["bun"]
+
+    # Check for updates and set BUN_VERSIONS_TO_BUILD
+    updated_versions = []
+    for vt in version_types:
+        if latest_versions[vt] != current_versions[vt]:
+            updated_versions.append(latest_versions[vt])
+
+    if updated_versions:
+        print(",".join(updated_versions))
 
 
 if __name__ == "__main__":

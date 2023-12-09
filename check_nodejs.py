@@ -3,6 +3,7 @@ Fetches Node.js versions for specified major versions from the Node.js previous 
 """
 
 import argparse
+import json
 import requests
 from bs4 import BeautifulSoup
 
@@ -42,23 +43,38 @@ def main():
     Fetches Node.js versions for specified major versions from the Node.js previous releases page.
 
     Command-line Arguments:
-      major_versions (list): A list of major versions to filter for.
+      major_versions (str): A string of major versions separated by commas.
     """
     parser = argparse.ArgumentParser(
         description="Fetch Node.js versions for specific major versions."
     )
     parser.add_argument(
         "major_versions",
-        nargs="+",
-        type=int,
-        help="List of major versions to fetch, separated by spaces",
+        type=str,
+        help="Comma-separated list of major versions to fetch",
     )
 
     args = parser.parse_args()
 
+    # Convert comma-separated string to list of integers
+    major_versions = [int(major) for major in args.major_versions.split(",")]
+
     # Get Node.js versions
-    nodejs_versions = get_nodejs_versions(args.major_versions)
-    print(nodejs_versions)
+    nodejs_versions = get_nodejs_versions(major_versions)
+
+    # Read current versions from versions.json
+    with open("versions.json", encoding="utf-8") as f:
+        current_versions = json.load(f)["nodejs"]
+
+    # Check for updates and set NODE_VERSIONS_TO_BUILD
+    updated_versions = []
+    for version in nodejs_versions:
+        major = version[1:].split(".")[0]
+        if version != current_versions[major]["version"]:
+            updated_versions.append(version)
+
+    if updated_versions:
+        print(",".join(version[1:] for version in updated_versions))
 
 
 if __name__ == "__main__":

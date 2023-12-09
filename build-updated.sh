@@ -20,8 +20,8 @@ update_json() {
 }
 
 # Convert comma-separated strings to arrays
-IFS=',' read -ra node_versions <<<"$NODE_VERSIONS"
-IFS=',' read -ra bun_tags <<<"$BUN_TAGS"
+IFS=',' read -ra node_versions <<<"$NODE_VERSIONS_TO_BUILD"
+IFS=',' read -ra bun_tags <<<"$BUN_TAGS_TO_BUILD"
 IFS=',' read -ra distros <<<"$DISTROS"
 
 # Check if LAST_BUILT_FILE exists
