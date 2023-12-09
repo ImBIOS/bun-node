@@ -31,10 +31,13 @@ for version in "${BUN_VERSIONS[@]}"; do
   validate_version "$version"
 done
 
+# Read the JSON file
+json_data=$(cat versions.json)
+
 # Function to generate tags
 generate_tags() {
-  local node_version=$1
-  local bun_version=$2
+  local bun_version=$1
+  local node_version=$2
   local distro=$3
 
   local node_major=${node_version%%.*}
@@ -50,31 +53,51 @@ generate_tags() {
   fi
 
   # Base tag
-  echo "$REGISTRY/bun-node:${node_version}-${bun_version}-${distro}"
+  echo "$REGISTRY/bun-node:${bun_version}-${node_version}-${distro}"
 
   # Additional tags
-  if [ "$is_canary" = false ]; then
-    echo "$REGISTRY/bun-node:${node_minor}-${bun_version}-${distro}"
-    echo "$REGISTRY/bun-node:${node_major}-${bun_version}-${distro}"
-    echo "$REGISTRY/bun-node:${node_version}-${bun_minor}-${distro}"
-    echo "$REGISTRY/bun-node:${node_version}-${bun_major}-${distro}"
-    echo "$REGISTRY/bun-node:${node_minor}-${bun_minor}-${distro}"
-    echo "$REGISTRY/bun-node:${node_minor}-${bun_major}-${distro}"
-    echo "$REGISTRY/bun-node:${node_major}-${bun_minor}-${distro}"
-    echo "$REGISTRY/bun-node:${node_major}-${bun_major}-${distro}"
+  if [ $is_canary == false ]; then
+    echo "$REGISTRY/bun-node:${bun_minor}-${node_version}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_major}-${node_version}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_version}-${node_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_version}-${node_major}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_minor}-${node_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_minor}-${node_major}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_major}-${node_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${bun_major}-${node_major}-${distro}"
+  elif [[ $bun_version == "canary" ]]; then
+    echo "$REGISTRY/bun-node:canary-${node_minor}-${distro}"
+    echo "$REGISTRY/bun-node:canary-${node_major}-${distro}"
   fi
 
-  # Special 'latest' and 'current' tags
-  echo "$REGISTRY/bun-node:current-${bun_version}-${distro}"
-  if [[ "$node_version" == "21" ]]; then
-    echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
-    echo "$REGISTRY/bun-node:21-latest-${distro}"
+  # Special nodejs codename tags
+  # Extract the codename for the current version
+  local codename=$(echo "${json_data}" | jq -r ".nodejs.\"${node_major}\".name")
+  echo "$REGISTRY/bun-node:${bun_version}-${codename}-${distro}"
+  if [[ $is_canary == false ]]; then
+    echo "$REGISTRY/bun-node:latest-${node_version}-${distro}"
+    echo "$REGISTRY/bun-node:latest-${node_major}-${distro}"
+    echo "$REGISTRY/bun-node:latest-${codename}-${distro}"
+  fi
+
+  # Special 'latest' tag
+  local is_latest_lts=false
+  if [[ "$node_major" == "20" ]]; then
+    is_latest_lts=true
+  fi
+  if [[ $is_canary == false && $is_latest_lts && $distro == "debian" ]]; then
+    echo "$REGISTRY/bun-node:latest"
+  fi
+
+  # Special 'node_major-distro' tag
+  if [[ $is_canary == false ]]; then
+    echo "$REGISTRY/bun-node:${node_major}-${distro}"
   fi
 }
 
 # Build, tag, and push loop
-for node_version in "${NODE_VERSIONS[@]}"; do
-  for bun_version in "${BUN_VERSIONS[@]}"; do
+for bun_version in "${BUN_VERSIONS[@]}"; do
+  for node_version in "${NODE_VERSIONS[@]}"; do
     for distro in "${DISTROS[@]}"; do
       tag_distro=$distro
       if [ "$distro" == "debian-slim" ]; then
@@ -82,12 +105,12 @@ for node_version in "${NODE_VERSIONS[@]}"; do
       fi
 
       # Building the image
-      log "Building image for Node version $node_version, Bun version $bun_version, Distro $distro"
-      image_name="$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}"
+      log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
+      image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
       # docker buildx build --platform "$PLATFORMS" -t "$image_name" "./${node_version}/${distro}" --push
 
       # Generate tags
-      tags=($(generate_tags "$node_version" "$bun_version" "$tag_distro"))
+      tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
         # docker tag "$image_name" "$tag"
