@@ -108,7 +108,7 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       node_major=${node_version%%.*}
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
-      docker buildx build --platform "$PLATFORMS" -t "$image_name" "./src/${node_major}/${distro}" --push
+      docker buildx build --platform "$PLATFORMS" -t "$image_name" "./src/${node_major}/${distro}"
 
       # Generate tags
       tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
