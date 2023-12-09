@@ -46,6 +46,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
+          python-version: "3.12"
           cache: "pip"
 
       - name: Install dependencies
@@ -80,7 +81,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add last_bun.txt last_nodejs.txt
+          git add versions.json
           git diff-index --quiet HEAD || git commit -m "build: update versions"
       - name: Pull changes
         run: git pull -r
