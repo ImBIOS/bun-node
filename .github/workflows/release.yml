@@ -25,11 +25,6 @@ env:
   BUN_TAGS: canary,latest
   DISTROS: alpine,debian-slim,debian
 
-  nodejs-is-out-of-date: false
-  nodejs-version: ""
-  bun-is-out-of-date: false
-  bun-version: ""
-
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
@@ -41,27 +36,31 @@ jobs:
       - name: Install jq
         run: sudo apt-get install jq
 
-      - name: Check for new releases in nodejs/node
-        id: nodejs
-        run: ./check-new-release.sh nodejs/node nodejs
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          cache: 'pip'
 
-      - name: Check for new releases in oven-sh/bun
-        id: bun
-        run: ./check-new-release.sh oven-sh/bun bun
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check for new releases of nodejs and bun
+        run: |
+          python lab_check_bun.py
+          python lab_check_nodejs.py 21 20 18 16 14
 
       - name: Setup Docker Buildx
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker images
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         run: ./build-all.sh
         env:
           REGISTRY: ${{ env.REGISTRY }}
@@ -71,17 +70,14 @@ jobs:
           DISTROS: ${{ env.DISTROS }}
 
       - name: Commit changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add last_bun.txt last_nodejs.txt
           git diff-index --quiet HEAD || git commit -m "build: update versions"
       - name: Pull changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         run: git pull -r
       - name: Push changes
-        if: env.nodejs-is-out-of-date == 'true' || env.bun-is-out-of-date == 'true'
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

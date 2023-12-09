@@ -4,10 +4,25 @@
     "canary": "1.0.8-canary.20231104.1"
   },
   "nodejs": {
-    "current": "21.1.0",
-    "iron": "20.9.0",
-    "hydrogen": "18.18.2",
-    "gallium": "16.20.2",
-    "fermium": "14.21.3"
+    "21": {
+      "name": "current",
+      "version": "21.1.0"
+    },
+    "20": {
+      "name": "iron",
+      "version": "20.9.0"
+    },
+    "18": {
+      "name": "hydrogen",
+      "version": "18.18.2"
+    },
+    "16": {
+      "name": "gallium",
+      "version": "16.20.2"
+    },
+    "14": {
+      "name": "fermium",
+      "version": "14.21.3"
+    }
   }
 }
