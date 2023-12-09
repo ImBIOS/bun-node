@@ -31,6 +31,9 @@ for version in "${BUN_VERSIONS[@]}"; do
   validate_version "$version"
 done
 
+# Read the JSON file
+json_data=$(cat versions.json)
+
 # Function to generate tags
 generate_tags() {
   local node_version=$1
@@ -53,7 +56,7 @@ generate_tags() {
   echo "$REGISTRY/bun-node:${node_version}-${bun_version}-${distro}"
 
   # Additional tags
-  if [ $is_canary = false ]; then
+  if [ $is_canary == false ]; then
     echo "$REGISTRY/bun-node:${node_minor}-${bun_version}-${distro}"
     echo "$REGISTRY/bun-node:${node_major}-${bun_version}-${distro}"
     echo "$REGISTRY/bun-node:${node_version}-${bun_minor}-${distro}"
@@ -67,24 +70,36 @@ generate_tags() {
     echo "$REGISTRY/bun-node:${node_major}-canary-${distro}"
   fi
 
-  # Special 'latest' and 'current' tags
+  # TODO Get these tagging codename from versions.json
+  # Special 'current' tags
   if [[ "$node_major" == "21" ]]; then
-    echo "$REGISTRY/bun-node:current-${bun_version}-${distro}"
-    if [[ $is_canary = false ]]; then
+    # Extract the codename for the current version
+    local codename=$(echo "${json_data}" | jq -r '.nodejs."21".name')
+    echo "$REGISTRY/bun-node:${codename}-${bun_version}-${distro}"
+    if [[ $is_canary == false ]]; then
       echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
       echo "$REGISTRY/bun-node:21-latest-${distro}"
-      echo "$REGISTRY/bun-node:current-latest-${distro}"
+      echo "$REGISTRY/bun-node:${codename}-latest-${distro}"
     fi
   fi
 
-  # Special 'iron' tag
+  # Special nodejs codename tags
+  # Extract the codename for the current version
+  local codename=$(echo "${json_data}" | jq -r ".nodejs.\"${node_major}\".name")
+  echo "$REGISTRY/bun-node:${codename}-${bun_version}-${distro}"
+  if [[ $is_canary == false ]]; then
+    echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
+    echo "$REGISTRY/bun-node:${node_major}-latest-${distro}"
+    echo "$REGISTRY/bun-node:${codename}-latest-${distro}"
+  fi
+
+  # Special 'latest' tag
+  local is_latest_lts=false
   if [[ "$node_major" == "20" ]]; then
-    echo "$REGISTRY/bun-node:iron-${bun_version}-${distro}"
-    if [[ $is_canary = false ]]; then
-      echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
-      echo "$REGISTRY/bun-node:20-latest-${distro}"
-      echo "$REGISTRY/bun-node:iron-latest-${distro}"
-    fi
+    is_latest_lts=true
+  fi
+  if [[ $is_canary == false && $is_latest_lts && $distro == "debian" ]]; then
+    echo "$REGISTRY/bun-node:latest"
   fi
 }
 
