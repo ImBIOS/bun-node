@@ -15,14 +15,6 @@
     "18": {
       "name": "hydrogen",
       "version": "v18.0.0"
-    },
-    "16": {
-      "name": "gallium",
-      "version": "v16.20.1"
-    },
-    "14": {
-      "name": "fermium",
-      "version": "v14.21.2"
     }
   }
 }
