@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Every day at midnight
+  workflow_dispatch:
+    inputs:
+      bun-versions:
+        description: "Bun version, comma separated (e.g. 0.0.1,0.0.2,1.0.8-canary.20231104.1)"
+        required: false
+        default: ""
+      nodejs-version:
+        description: "Node.js version, comma separated (e.g. 14.7.4,17.3.8,18.4.5)"
+        required: false
+        default: ""
+      distros:
+        description: "Distro, comma separated (e.g. alpine,debian-slim,debian)"
+        required: false
+        default: ""
+      # TODO: To be implemented
+      # skip-check:
+      #   description: "Skip version check"
+      #   required: false
+      #   default: "true"
+
+env:
+  REGISTRY: imbios
+  PLATFORMS: linux/amd64,linux/arm64
+  NODE_MAJOR_VERSIONS_TO_CHECK: 18,20,21
+  NODE_VERSIONS_TO_BUILD: ""
+  BUN_TAGS_TO_CHECK: canary,latest
+  BUN_VERSIONS_TO_BUILD: ""
+  DISTROS: alpine,debian-slim,debian
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install jq
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check for new releases of nodejs and bun
+        run: |
+          echo "NODE_VERSIONS_TO_BUILD=$(python check_nodejs.py ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
+          echo "BUN_VERSIONS_TO_BUILD=$(python check_bun.py ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        run: ./build-updated.sh
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          PLATFORMS: ${{ env.PLATFORMS }}
+          NODE_VERSIONS_TO_BUILD: ${{ env.NODE_VERSIONS_TO_BUILD }}
+          BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD }}
+          DISTROS: ${{ env.DISTROS }}
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add last_bun.txt last_nodejs.txt
+          git diff-index --quiet HEAD || git commit -m "build: update versions"
+      - name: Pull changes
+        run: git pull -r
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}

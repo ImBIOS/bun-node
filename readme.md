@@ -11,7 +11,7 @@ Use node.js as runtime, and bun as package manager, etc. The node.js in this doc
 
 ## Features
 
-- **Multiple Node.js Versions**: Supports Node.js 16, 18, 20
+- **Multiple Node.js Versions**: Supports Node.js versions which currently supported by [docker-node](https://github.com/nodejs/docker-node)
 - **Variety of Builds**: Available in Alpine, Debian, and Slim versions
 
 ## Quick Start

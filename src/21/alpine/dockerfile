@@ -89,7 +89,7 @@ RUN apk --no-cache add \
   *) echo "error: unsupported architecture '$arch'"; exit 1 ;; \
   esac
 
-FROM node:16-alpine3.18
+FROM node:21-alpine3.18
 
 COPY --from=build /tmp/glibc.apk /tmp/
 COPY --from=build /tmp/glibc-bin.apk /tmp/
