@@ -53,7 +53,7 @@ generate_tags() {
   echo "$REGISTRY/bun-node:${node_version}-${bun_version}-${distro}"
 
   # Additional tags
-  if [ "$is_canary" = false ]; then
+  if [ $is_canary = false ]; then
     echo "$REGISTRY/bun-node:${node_minor}-${bun_version}-${distro}"
     echo "$REGISTRY/bun-node:${node_major}-${bun_version}-${distro}"
     echo "$REGISTRY/bun-node:${node_version}-${bun_minor}-${distro}"
@@ -62,13 +62,29 @@ generate_tags() {
     echo "$REGISTRY/bun-node:${node_minor}-${bun_major}-${distro}"
     echo "$REGISTRY/bun-node:${node_major}-${bun_minor}-${distro}"
     echo "$REGISTRY/bun-node:${node_major}-${bun_major}-${distro}"
+  elif [[ $bun_version == "canary" ]]; then
+    echo "$REGISTRY/bun-node:${node_minor}-canary-${distro}"
+    echo "$REGISTRY/bun-node:${node_major}-canary-${distro}"
   fi
 
   # Special 'latest' and 'current' tags
-  echo "$REGISTRY/bun-node:current-${bun_version}-${distro}"
-  if [[ "$node_version" == "21" ]]; then
-    echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
-    echo "$REGISTRY/bun-node:21-latest-${distro}"
+  if [[ "$node_major" == "21" ]]; then
+    echo "$REGISTRY/bun-node:current-${bun_version}-${distro}"
+    if [[ $is_canary = false ]]; then
+      echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
+      echo "$REGISTRY/bun-node:21-latest-${distro}"
+      echo "$REGISTRY/bun-node:current-latest-${distro}"
+    fi
+  fi
+
+  # Special 'iron' tag
+  if [[ "$node_major" == "20" ]]; then
+    echo "$REGISTRY/bun-node:iron-${bun_version}-${distro}"
+    if [[ $is_canary = false ]]; then
+      echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
+      echo "$REGISTRY/bun-node:20-latest-${distro}"
+      echo "$REGISTRY/bun-node:iron-latest-${distro}"
+    fi
   fi
 }
 
