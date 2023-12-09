@@ -31,6 +31,47 @@ for version in "${BUN_VERSIONS[@]}"; do
   validate_version "$version"
 done
 
+# Function to generate tags
+generate_tags() {
+  local node_version=$1
+  local bun_version=$2
+  local distro=$3
+
+  local node_major=${node_version%%.*}
+  local node_minor=${node_version%.*}
+  local bun_major=${bun_version%%.*}
+  local bun_minor=${bun_version%.*}
+
+  # Canary version check
+  local is_canary=false
+  if [[ $bun_version == *"-canary"* ]]; then
+    is_canary=true
+    bun_version="canary"
+  fi
+
+  # Base tag
+  echo "$REGISTRY/bun-node:${node_version}-${bun_version}-${distro}"
+
+  # Additional tags
+  if [ "$is_canary" = false ]; then
+    echo "$REGISTRY/bun-node:${node_minor}-${bun_version}-${distro}"
+    echo "$REGISTRY/bun-node:${node_major}-${bun_version}-${distro}"
+    echo "$REGISTRY/bun-node:${node_version}-${bun_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${node_version}-${bun_major}-${distro}"
+    echo "$REGISTRY/bun-node:${node_minor}-${bun_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${node_minor}-${bun_major}-${distro}"
+    echo "$REGISTRY/bun-node:${node_major}-${bun_minor}-${distro}"
+    echo "$REGISTRY/bun-node:${node_major}-${bun_major}-${distro}"
+  fi
+
+  # Special 'latest' and 'current' tags
+  echo "$REGISTRY/bun-node:current-${bun_version}-${distro}"
+  if [[ "$node_version" == "21" ]]; then
+    echo "$REGISTRY/bun-node:${node_version}-latest-${distro}"
+    echo "$REGISTRY/bun-node:21-latest-${distro}"
+  fi
+}
+
 # Build, tag, and push loop
 for node_version in "${NODE_VERSIONS[@]}"; do
   for bun_version in "${BUN_VERSIONS[@]}"; do
@@ -42,14 +83,16 @@ for node_version in "${NODE_VERSIONS[@]}"; do
 
       # Building the image
       log "Building image for Node version $node_version, Bun version $bun_version, Distro $distro"
-      log "$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}"
-      # docker buildx build --platform "$PLATFORMS" -t "$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}" "./${node_version}/${distro}" --push
+      image_name="$REGISTRY/bun-node:${node_version}-${bun_version}-${tag_distro}"
+      # docker buildx build --platform "$PLATFORMS" -t "$image_name" "./${node_version}/${distro}" --push
 
-      # Tagging the node latest lts, bun latest, and distro debian as latest
-      if [[ "$node_version" == "21" && "$bun_version" == "latest" && "$distro" == "debian" ]]; then
-        log "Tagging the latest version"
-        # docker buildx build --platform "$PLATFORMS" -t "$REGISTRY/bun-node:latest" "./${node_version}/${distro}" --push
-      fi
+      # Generate tags
+      tags=($(generate_tags "$node_version" "$bun_version" "$tag_distro"))
+      for tag in "${tags[@]}"; do
+        log "Tagging $image_name as $tag"
+        # docker tag "$image_name" "$tag"
+        # docker push "$tag"
+      done
     done
   done
 done
