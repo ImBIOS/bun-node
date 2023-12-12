@@ -23,6 +23,33 @@ IFS=',' read -ra NODE_VERSIONS <<<"$NODE_VERSIONS_TO_BUILD"
 IFS=',' read -ra BUN_VERSIONS <<<"$BUN_VERSIONS_TO_BUILD"
 IFS=',' read -ra DISTROS <<<"$DISTROS"
 
+# If NODE_VERSIONS_TO_BUILD is empty, but BUN_VERSIONS_TO_BUILD is not,
+# build all versions from versions.json
+if [ -z "$NODE_VERSIONS_TO_BUILD" ]; then
+  IFS=',' read -ra NODE_MAJOR_VERSIONS <<<"$NODE_MAJOR_VERSIONS_TO_CHECK"
+  NODE_VERSIONS=()
+  for node_major_version in "${NODE_MAJOR_VERSIONS[@]}"; do
+    node_version=$(cat versions.json | jq -r ".nodejs.\"${node_major_version}\".version")
+    if [ "$node_version" != "null" ]; then
+      # Remove v from version
+      NODE_VERSIONS+=("${node_version:1}")
+    fi
+  done
+fi
+
+log "Building Node versions: ${NODE_VERSIONS[*]}"
+
+# If BUN_VERSIONS_TO_BUILD is empty, but NODE_VERSIONS_TO_BUILD is not,
+# build all versions from versions.json
+if [ -z "$BUN_VERSIONS_TO_BUILD" ]; then
+  BUN_VERSIONS=()
+  for bun_version in $(cat versions.json | jq -r '.bun | keys[]'); do
+    BUN_VERSIONS+=("${bun_version:1}")
+  done
+fi
+
+log "Building Bun versions: ${BUN_VERSIONS[*]}"
+
 # Validate versions
 for version in "${NODE_VERSIONS[@]}"; do
   validate_version "$version"
