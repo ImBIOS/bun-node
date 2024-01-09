@@ -1,93 +1,109 @@
 """
-Fetches the latest Bun version based on the version type specified as a command-line argument.
+Script to fetch the latest versions of the Bun package based on specified version types.
+
+Usage:
+    python check_bun.py [version_type]
+
+Arguments:
+    version_type: Comma-separated list of version types to fetch. Valid options: "latest", "canary".
 """
 
 import argparse
 import json
-import os
 import requests
 from bs4 import BeautifulSoup
 from packaging import version
+from typing import List, Dict, Optional
 
 
-def get_bun_latest_versions(version_types):
+def get_bun_latest_versions(version_types: List[str]) -> Dict[str, Optional[str]]:
     """
-    Fetches the latest Bun version(s) based on the version types from the Bun NPM page.
+    Fetches the latest Bun versions from the Bun NPM page based on specified version types.
 
     Args:
-      version_types (list): The types of versions to fetch.
+        version_types (List[str]): List of version types to fetch.
 
     Returns:
-      dict: A dictionary with keys as version types and their
-      corresponding latest versions as values.
+        Dict[str, Optional[str]]: Dictionary with version types as keys and latest version strings as values.
     """
     url = "https://www.npmjs.com/package/bun?activeTab=versions"
-    response = requests.get(url, timeout=5)
+    try:
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        raise RuntimeError("Failed to fetch Bun versions") from e
+
     soup = BeautifulSoup(response.content, "html.parser")
-
-    # Find all version elements on the page
     versions = soup.find_all("a", class_="_132722c7 f5 black-60 lh-copy code")
-    version_list = [version.get_text().strip() for version in versions]
+    version_list = [ver.get_text().strip() for ver in versions]
 
-    # Get the latest versions
     latest_versions = {"latest": None, "canary": None}
 
-    for version_str in version_list:
-        # Split the version string at the first hyphen
-        version_parts = version_str.split("-", 1)
-        parsed_version = version.parse(version_parts[0])
+    for ver_str in version_list:
+        parsed_version, is_canary = parse_version(ver_str)
+        update_latest_versions(latest_versions, ver_str, parsed_version, is_canary, version_types)
 
-        if "canary" in version_str and "canary" in version_types:
-            if latest_versions["canary"] is None or parsed_version > version.parse(
-                latest_versions["canary"].split("-", 1)[0]
-            ):
-                latest_versions["canary"] = version_str
-        elif "canary" not in version_str and "latest" in version_types:
-            if latest_versions["latest"] is None or parsed_version > version.parse(
-                latest_versions["latest"].split("-", 1)[0]
-            ):
-                latest_versions["latest"] = version_str
-
-    # Return filtered results
     return {k: v for k, v in latest_versions.items() if k in version_types}
 
 
+def parse_version(version_str: str) -> (version.Version, bool):
+    """
+    Parses a version string and identifies if it's a canary version.
+
+    Args:
+        version_str (str): The version string to parse.
+
+    Returns:
+        version.Version: The parsed version.
+        bool: True if it's a canary version, False otherwise.
+    """
+    version_parts = version_str.split("-", 1)
+    parsed_version = version.parse(version_parts[0])
+    is_canary = "canary" in version_str
+    return parsed_version, is_canary
+
+
+def update_latest_versions(latest_versions: Dict[str, Optional[str]], version_str: str,
+                           parsed_version: version.Version, is_canary: bool, version_types: List[str]):
+    """
+    Updates the dictionary of latest versions if a newer version is found.
+
+    Args:
+        latest_versions (Dict[str, Optional[str]]): Dictionary to store latest versions.
+        version_str (str): The version string.
+        parsed_version (version.Version): Parsed version object.
+        is_canary (bool): Flag indicating if the version is a canary version.
+        version_types (List[str]): List of version types to consider.
+    """
+    type_key = "canary" if is_canary else "latest"
+    if type_key in version_types:
+        current_version = latest_versions[type_key]
+        if current_version is None or parsed_version > version.parse(current_version.split("-", 1)[0]):
+            latest_versions[type_key] = version_str
+
+
 def main():
-    """
-    Fetches the latest Bun version(s) based on the version
-    types specified as a command-line argument.
-
-    Command-line Arguments:
-      version_type (str): Comma-separated list of version types to fetch.
-      Possible values are "latest", "canary".
-    """
-    parser = argparse.ArgumentParser(
-        description="Fetch the latest Bun version(s) based on version types."
-    )
+    parser = argparse.ArgumentParser(description="Fetch the latest Bun versions.")
     parser.add_argument(
-        "version_type",
-        type=str,
-        default="latest,canary",
-        help="Comma-separated list of version types to fetch: latest, canary",
+        "version_type", type=str, default="latest,canary",
+        help="Comma-separated list of version types to fetch: latest, canary"
     )
-
     args = parser.parse_args()
-
-    # Convert comma-separated string to list
     version_types = args.version_type.split(",")
 
-    # Get the latest Bun version(s)
-    latest_versions = get_bun_latest_versions(version_types)
+    try:
+        latest_versions = get_bun_latest_versions(version_types)
+    except RuntimeError as e:
+        print(str(e))
+        return
 
-    # Read current versions from versions.json
     with open("versions.json", encoding="utf-8") as f:
         current_versions = json.load(f)["bun"]
 
-    # Check for updates and set BUN_VERSIONS_TO_BUILD
-    updated_versions = []
-    for vt in version_types:
-        if latest_versions[vt] != current_versions[vt]:
-            updated_versions.append(latest_versions[vt])
+    updated_versions = [
+        latest_versions[vt] for vt in version_types
+        if latest_versions[vt] != current_versions.get(vt)
+    ]
 
     if updated_versions:
         print(",".join(updated_versions))
