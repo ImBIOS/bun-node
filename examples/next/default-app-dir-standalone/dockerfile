@@ -5,7 +5,7 @@ FROM imbios/bun-node:latest
 WORKDIR /app
 
 # Copy the package.json and bun.lockb files to the working directory
-COPY package.json bun.lock ./
+COPY package.json bun.lockb ./
 
 # Install the app dependencies
 RUN bun install
