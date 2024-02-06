@@ -140,7 +140,7 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
-        # docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/${node_major}/${distro}" --push
+        docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/${node_major}/${distro}" --push
       done
 
       # On success, update the versions.json file
