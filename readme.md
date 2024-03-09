@@ -26,9 +26,15 @@ docker pull imbios/bun-node
 - **debian**: Standard build, balanced between size and features
 - **slim**: Debian-based but lighter, stripped of unnecessary files
 
-## Image Tagging
+## Advanced Image Tagging
 
-TODO
+```txt
+imbios/bun-node:<bun-version>-<node-version>-<build-type>
+```
+
+- **bun-version**: Bun version (e.g. 1.0.0, 1.0.30, 1) or tag (e.g. latest or canary)
+- **node-version**: Node.js version (e.g. 18, 20.11, 21.7.1) or tag (e.g. hydrogen, iron, current)
+- **build-type**: Build type (e.g. alpine, debian, slim)
 
 ## Show Your Support 🌟
 
