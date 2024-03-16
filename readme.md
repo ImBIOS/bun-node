@@ -29,12 +29,13 @@ docker pull imbios/bun-node
 ## Advanced Image Tagging
 
 ```txt
-imbios/bun-node:<bun-version>-<node-version>-<build-type>
+imbios/bun-node:<bun-version>-<node-version>-<build-type>[optional -git]
 ```
 
 - **bun-version**: Bun version (e.g. 1.0.0, 1.0.30, 1) or tag (e.g. latest or canary)
 - **node-version**: Node.js version (e.g. 18, 20.11, 21.7.1) or tag (e.g. hydrogen, iron, current)
 - **build-type**: Build type (e.g. alpine, debian, slim)
+- **optional -git**: Optional git tag, an alpine image with git installed
 
 ## Show Your Support 🌟
 
