@@ -55,7 +55,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Check for new releases of nodejs and bun
-        if: ${{ inputs.nodejs-version != '' || inputs.bun-versions != '' || inputs.distros != '' }}
+        if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
         run: |
           echo "NODE_VERSIONS_TO_BUILD=$(python check_nodejs.py ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
           echo "BUN_VERSIONS_TO_BUILD=$(python check_bun.py ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
