@@ -32,7 +32,7 @@ if [ -z "$NODE_VERSIONS_TO_BUILD" ]; then
     node_version=$(cat versions.json | jq -r ".nodejs.\"${node_major_version}\".version")
     if [ "$node_version" != "null" ]; then
       # Remove v from version
-      NODE_VERSIONS+=("${node_version:1}")
+      NODE_VERSIONS+=("${node_version//v/}")
     fi
   done
 fi
@@ -44,7 +44,8 @@ log "Building Node versions: ${NODE_VERSIONS[*]}"
 if [ -z "$BUN_VERSIONS_TO_BUILD" ]; then
   BUN_VERSIONS=()
   for bun_version in $(cat versions.json | jq -r '.bun | keys[]'); do
-    BUN_VERSIONS+=("${bun_version:1}")
+    # Remove v from version
+    BUN_VERSIONS+=("${bun_version//v/}")
   done
 fi
 
