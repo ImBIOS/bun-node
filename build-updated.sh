@@ -137,7 +137,7 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       # Building the image
       node_major=${node_version%%.*}
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
-      image_name="$REGISTRY/bun-node:${bun_versidon}-${node_version}-${tag_distro}"
+      image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
 
