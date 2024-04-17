@@ -71,9 +71,9 @@ ARG BUN_INSTALL_BIN=/usr/local/bin
 ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
 
 RUN groupadd bun \
-  --gid 1001 \
+  --gid 1000 \
   && useradd bun \
-  --uid 1001 \
+  --uid 1000 \
   --gid bun \
   --shell /bin/sh \
   --create-home \
