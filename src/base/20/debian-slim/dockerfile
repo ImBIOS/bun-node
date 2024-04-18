@@ -70,9 +70,9 @@ COPY docker-entrypoint.sh /usr/local/bin
 COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 
 RUN groupadd bun \
-  --gid 1000 \
+  --gid 1001 \
   && useradd bun \
-  --uid 1000 \
+  --uid 1001 \
   --gid bun \
   --shell /bin/sh \
   --create-home \
