@@ -39,7 +39,7 @@ imbios/bun-node:<bun-version>-<node-version>-<build-type>[optional -git]
 
 ## Show Your Support 🌟
 
-If you find this Docker image useful, please consider giving it a star on GitHub! Your support encourages me to keep maintaining and improving it.
+If you find this Docker image useful, please consider giving it a star on GitHub and Dockerhub! Your support encourages me to keep maintaining and improving it.
 
 ## Contribution
 
