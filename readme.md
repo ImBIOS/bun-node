@@ -37,9 +37,9 @@ imbios/bun-node:<bun-version>-<node-version>-<build-type>[optional -git]
 - **build-type**: Build type (e.g. alpine, debian, slim)
 - **optional -git**: Optional git tag, an alpine image with git installed
 
-## Show Your Support 🌟
+## Show Your Support 🌟💸
 
-If you find this Docker image useful, please consider giving it a star on GitHub and Dockerhub! Your support encourages me to keep maintaining and improving it.
+If you find this Docker image useful, please consider giving it a star on GitHub and Dockerhub, or even better, a donations! Your support encourages me to keep maintaining and improving it.
 
 ## Contribution
 
