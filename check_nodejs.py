@@ -4,6 +4,7 @@ Fetches Node.js versions for specified major versions from the Node.js previous 
 
 import argparse
 import json
+import sys
 import requests
 from bs4 import BeautifulSoup
 
@@ -70,8 +71,12 @@ def main():
     updated_versions = []
     for version in nodejs_versions:
         major = version[1:].split(".")[0]
-        if version != current_versions[major]["version"]:
-            updated_versions.append(version)
+        if major in current_versions:
+            if version != current_versions[major]["version"]:
+                updated_versions.append(version)
+        else:
+            # Log a error if the major version is not found
+            print(f"Error: Major version {major} not found in current versions.", file=sys.stderr)
 
     if updated_versions:
         print(",".join(version[1:] for version in updated_versions))

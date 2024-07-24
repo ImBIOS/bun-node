@@ -1,3 +1,0 @@
-beautifulsoup4==4.12.2
-packaging==23.2
-requests==2.32.0
