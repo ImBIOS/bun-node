@@ -12,7 +12,7 @@ COMMIT_MESSAGE="build: update image(s) version
 
 - bun: (canary) ${BUN_CANARY_VERSION}, (latest) ${BUN_LATEST_VERSION}
 - nodejs:
-${NODE_VERSIONS//\n/  }
+${NODE_VERSIONS}
 - distro: ${DISTROS}"
 
 # Configure git
