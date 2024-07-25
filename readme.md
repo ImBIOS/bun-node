@@ -45,14 +45,6 @@ If you find this Docker image useful, please consider giving it a star on GitHub
 
 Feel free to contribute by submitting pull requests or by reporting issues.
 
-## Development
-
-### Pipenv
-
-```bash
-pipenv install --dev
-```
-
 ## License
 
 This project is licensed under the MIT License.
