@@ -76,7 +76,10 @@ def main():
                 updated_versions.append(version)
         else:
             # Log a error if the major version is not found
-            print(f"Error: Major version {major} not found in current versions.", file=sys.stderr)
+            print(
+                f"Error: Major version {major} not found in current versions.",
+                file=sys.stderr,
+            )
 
     if updated_versions:
         print(",".join(version[1:] for version in updated_versions))

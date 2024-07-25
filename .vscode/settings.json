@@ -1,0 +1,12 @@
+{
+	"editor.codeActionsOnSave": {
+		"source.organizeImports": "explicit",
+		"source.fixAll": "explicit",
+		"source.convertImportFormat": "explicit",
+		"source.unusedImports": "explicit"
+	},
+	"editor.formatOnSave": true,
+	"[python]": {
+		"editor.defaultFormatter": "ms-python.black-formatter"
+	}
+}

@@ -1,19 +1,21 @@
 """
-Script to fetch the latest versions of the Bun package based on specified version types.
+Script to fetch the latest versions of the Bun package based on specified
+version types.
 
 Usage:
     python check_bun.py [version_type]
 
 Arguments:
-    version_type: Comma-separated list of version types to fetch. Valid options: "latest", "canary".
+    version_type: Comma-separated list of version types to fetch. Valid
+    options: "latest", "canary".
 """
 
 import argparse
 import json
+from typing import List, Dict, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 from packaging import version
-from typing import List, Dict, Optional
 
 
 def get_bun_latest_versions(version_types: List[str]) -> Dict[str, Optional[str]]:
@@ -41,12 +43,14 @@ def get_bun_latest_versions(version_types: List[str]) -> Dict[str, Optional[str]
 
     for ver_str in version_list:
         parsed_version, is_canary = parse_version(ver_str)
-        update_latest_versions(latest_versions, ver_str, parsed_version, is_canary, version_types)
+        update_latest_versions(
+            latest_versions, ver_str, parsed_version, is_canary, version_types
+        )
 
     return {k: v for k, v in latest_versions.items() if k in version_types}
 
 
-def parse_version(version_str: str) -> (version.Version, bool):
+def parse_version(version_str: str) -> Tuple[version.Version, bool]:
     """
     Parses a version string and identifies if it's a canary version.
 
@@ -63,8 +67,13 @@ def parse_version(version_str: str) -> (version.Version, bool):
     return parsed_version, is_canary
 
 
-def update_latest_versions(latest_versions: Dict[str, Optional[str]], version_str: str,
-                           parsed_version: version.Version, is_canary: bool, version_types: List[str]):
+def update_latest_versions(
+    latest_versions: Dict[str, Optional[str]],
+    version_str: str,
+    parsed_version: version.Version,
+    is_canary: bool,
+    version_types: List[str],
+):
     """
     Updates the dictionary of latest versions if a newer version is found.
 
@@ -78,15 +87,29 @@ def update_latest_versions(latest_versions: Dict[str, Optional[str]], version_st
     type_key = "canary" if is_canary else "latest"
     if type_key in version_types:
         current_version = latest_versions[type_key]
-        if current_version is None or parsed_version > version.parse(current_version.split("-", 1)[0]):
+        if current_version is None or parsed_version > version.parse(
+            current_version.split("-", 1)[0]
+        ):
             latest_versions[type_key] = version_str
 
 
 def main():
+    """
+    Fetches the latest Bun versions and compares them with the current versions.
+    If there are any updated versions, it prints them.
+
+    Args:
+      version_type (str): Comma-separated list of version types to fetch: latest, canary
+
+    Returns:
+      None
+    """
     parser = argparse.ArgumentParser(description="Fetch the latest Bun versions.")
     parser.add_argument(
-        "version_type", type=str, default="latest,canary",
-        help="Comma-separated list of version types to fetch: latest, canary"
+        "version_type",
+        type=str,
+        default="latest,canary",
+        help="Comma-separated list of version types to fetch: latest, canary",
     )
     args = parser.parse_args()
     version_types = args.version_type.split(",")
@@ -101,7 +124,8 @@ def main():
         current_versions = json.load(f)["bun"]
 
     updated_versions = [
-        latest_versions[vt] for vt in version_types
+        latest_versions[vt]
+        for vt in version_types
         if latest_versions[vt] != current_versions.get(vt)
     ]
 
