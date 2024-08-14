@@ -70,8 +70,11 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - name: Build and push Docker images
-        run: ./build-updated.sh
+      - uses: nick-fields/retry@v3
+        name: Build and push Docker images
+        with:
+          max_attempts: 3
+          command: ./build-updated.sh
         env:
           REGISTRY: ${{ env.REGISTRY }}
           PLATFORMS: ${{ env.PLATFORMS }}
