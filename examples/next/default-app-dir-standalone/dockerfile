@@ -20,5 +20,4 @@ RUN bun run build
 EXPOSE 3000
 
 # Start the app
-CMD ["node", "run", "start"]
-
+CMD ["bun", "run", "start"]
