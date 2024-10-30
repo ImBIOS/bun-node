@@ -1,12 +1,12 @@
 {
   "bun": {
     "latest": "v1.1.33",
-    "canary": "v1.1.20-canary.20241028.1"
+    "canary": "v1.1.20-canary.20241029.1"
   },
   "nodejs": {
     "22": {
       "name": "current",
-      "version": "v22.10.0"
+      "version": "v22.11.0"
     },
     "20": {
       "name": "iron",
