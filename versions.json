@@ -1,7 +1,7 @@
 {
   "bun": {
     "latest": "v1.1.38",
-    "canary": "v1.1.20-canary.20241203.1"
+    "canary": "v1.1.38-canary.20241204.2"
   },
   "nodejs": {
     "22": {
