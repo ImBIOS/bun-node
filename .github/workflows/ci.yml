@@ -21,8 +21,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up bashcov
-        uses: infertux/bashcov/.github/actions/set-up-bashcov@master
+      # - name: Set up bashcov
+      #   uses: infertux/bashcov/.github/actions/set-up-bashcov@master
 
       - name: Set up Python
         uses: actions/setup-python@v5
