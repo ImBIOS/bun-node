@@ -1,1 +1,7 @@
-venv/
+.Pipfile
+.Pipfile.lock
+.venv/
+.coverage
+*.lcov
+coverage.info
+coverage/
