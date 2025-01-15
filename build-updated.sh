@@ -142,12 +142,12 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
 
-        docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/base/${node_major}/${distro}" --push
+        docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/base/${node_major}/${distro}" --push --provenance=mode=max
 
         # alpine image with git
         if [ "$distro" == "alpine" ]; then
           log "Building and Tagging Alpine image with Git"
-          docker buildx build --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" "./src/git/${node_major}/${distro}" --push
+          docker buildx build --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" "./src/git/${node_major}/${distro}" --push --provenance=mode=max
         fi
       done
 
