@@ -4,8 +4,12 @@
     "canary": "v1.1.20-canary.20240813.1"
   },
   "nodejs": {
-    "22": {
+    "23": {
       "name": "current",
+      "version": "v23.6.0"
+    },
+    "22": {
+      "name": "jod",
       "version": "v22.6.0"
     },
     "20": {
