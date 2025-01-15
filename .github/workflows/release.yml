@@ -47,19 +47,27 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: "pipenv"
 
-      - name: Install dependencies
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Install dependencies using pipenv
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pipenv install --dev
+
+      - name: Run tests with coverage
+        run: |
+          pipenv run pytest --cov --cov-report=lcov
+          # bashcov ./test-commit-changes.sh
+          # ./merge_lcov.sh src merged.lcov
 
       - name: Check for new releases of nodejs and bun
         if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
         run: |
           set -e
-          echo "NODE_VERSIONS_TO_BUILD=$(python check_nodejs.py ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
-          echo "BUN_VERSIONS_TO_BUILD=$(python check_bun.py ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
+          echo "NODE_VERSIONS_TO_BUILD=$(pipenv run python check_nodejs.py ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
+          echo "BUN_VERSIONS_TO_BUILD=$(pipenv run python check_bun.py ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
