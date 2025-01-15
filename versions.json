@@ -1,7 +1,7 @@
 {
   "bun": {
-    "latest": "v1.1.22",
-    "canary": "v1.1.20-canary.20240813.1"
+    "latest": "v1.1.43",
+    "canary": "v1.1.43-canary.20250114.1"
   },
   "nodejs": {
     "23": {
@@ -11,14 +11,15 @@
     "22": {
       "name": "jod",
       "version": "v22.6.0"
+      "version": "v22.13.0"
     },
     "20": {
       "name": "iron",
-      "version": "v20.16.0"
+      "version": "v20.18.1"
     },
     "18": {
       "name": "hydrogen",
-      "version": "v18.20.4"
+      "version": "v18.20.5"
     }
   }
 }

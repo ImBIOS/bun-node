@@ -73,7 +73,9 @@ jobs:
       - uses: nick-fields/retry@v3
         name: Build and push Docker images
         with:
+          timeout_minutes: 60
           max_attempts: 3
+          retry_on: error
           command: ./build-updated.sh
         env:
           REGISTRY: ${{ env.REGISTRY }}
