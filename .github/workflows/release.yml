@@ -33,9 +33,10 @@ env:
   DISTROS: alpine,debian-slim,debian
 
 jobs:
-  test:
+  test-job:
     uses: ./.github/workflows/ci.yml
-  check-and-build:
+  check-and-build-job:
+    needs: test-job
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
