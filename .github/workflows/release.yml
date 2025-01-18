@@ -33,9 +33,10 @@ env:
   DISTROS: alpine,debian-slim,debian
 
 jobs:
+  call-workflow-2-in-local-repo:
+    uses: ./.github/workflows/ci.yml
   check-and-build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
