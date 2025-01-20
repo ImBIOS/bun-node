@@ -6,6 +6,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/ImBIOS/bun-node.svg "GitHub stars")](https://github.com/ImBIOS/bun-node)
 ![Test Coverage](https://github.com/ImBIOS/bun-node/raw/refs/heads/main/coverage.svg)
 ![CI Status](https://github.com/ImBIOS/bun-node/actions/workflows/ci.yml/badge.svg)
+![Release Status](https://github.com/ImBIOS/bun-node/actions/workflows/release.yml/badge.svg)
 
 This repository offers pre-configured Docker images combining [Bun](https://bun.sh/), with [Node.js](https://nodejs.org/), the popular JavaScript runtime. Ideal for development, testing, and production environments.
 
