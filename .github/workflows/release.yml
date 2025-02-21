@@ -35,7 +35,7 @@ env:
 jobs:
   test-job:
     uses: ./.github/workflows/ci.yml
-  check-and-build-job:
+  build-job:
     needs: test-job
     runs-on: ubuntu-latest
     steps:
@@ -57,12 +57,6 @@ jobs:
       - name: Install dependencies using pipenv
         run: |
           pipenv install --dev
-
-      - name: Run tests with coverage
-        run: |
-          pipenv run pytest --cov --cov-report=lcov
-          # bashcov ./test-commit-changes.sh
-          # ./merge_lcov.sh src merged.lcov
 
       - name: Check for new releases of nodejs and bun
         if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
@@ -106,3 +100,12 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+  rerun-failed-jobs:
+    runs-on: ubuntu-latest
+    needs: [build-job]
+    if: failure()
+    steps:
+      - name: Rerun failed jobs in the current workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run rerun ${{ github.run_id }} --failed
