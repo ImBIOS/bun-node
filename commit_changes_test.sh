@@ -16,7 +16,7 @@
 # }' >versions.json
 
 # # Run the original script (commit the changes)
-# ./commit-changes.sh
+# ./commit_changes.sh
 
 # # Now, ensure the commit is undone completely
 # git reset --hard HEAD~1 # This will undo the most recent commit

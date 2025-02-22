@@ -18,6 +18,24 @@ validate_version() {
   fi
 }
 
+# Retry function
+retry() {
+  local retries=${RETRIES:-3}
+  local count=0
+  until "$@"; do
+    exit_code=$?
+    count=$((count + 1))
+    if [ $count -lt $retries ]; then
+      log "Retrying ($count/$retries)..."
+      sleep 5
+    else
+      log "Failed after $count attempts."
+      return $exit_code
+    fi
+  done
+  return 0
+}
+
 # Convert comma-separated strings to arrays
 IFS=',' read -ra NODE_VERSIONS <<<"$NODE_VERSIONS_TO_BUILD"
 IFS=',' read -ra BUN_VERSIONS <<<"$BUN_VERSIONS_TO_BUILD"
@@ -31,7 +49,6 @@ if [ -z "$NODE_VERSIONS_TO_BUILD" ]; then
   for node_major_version in "${NODE_MAJOR_VERSIONS[@]}"; do
     node_version=$(cat versions.json | jq -r ".nodejs.\"${node_major_version}\".version")
     if [ "$node_version" != "null" ]; then
-      # Remove v from version
       NODE_VERSIONS+=("${node_version//v/}")
     fi
   done
@@ -44,7 +61,6 @@ log "Building Node versions: ${NODE_VERSIONS[*]}"
 if [ -z "$BUN_VERSIONS_TO_BUILD" ]; then
   BUN_VERSIONS=()
   for bun_version in $(cat versions.json | jq -r '.bun | keys[]'); do
-    # Remove v from version
     BUN_VERSIONS+=("${bun_version//v/}")
   done
 fi
@@ -73,51 +89,37 @@ generate_tags() {
   local bun_major=${bun_version%%.*}
   local bun_minor=${bun_version%.*}
 
-  # Canary version check
   local is_canary=false
   if [[ $bun_version == *"-canary"* ]]; then
     is_canary=true
     bun_version="canary"
   fi
 
-  # Base tag
   echo "$REGISTRY/bun-node:${bun_version}-${node_version}-${distro}"
 
-  # Additional tags
   if [ $is_canary == false ]; then
     echo "$REGISTRY/bun-node:${bun_minor}-${node_version}-${distro}"
     echo "$REGISTRY/bun-node:${bun_major}-${node_version}-${distro}"
     echo "$REGISTRY/bun-node:${bun_version}-${node_minor}-${distro}"
     echo "$REGISTRY/bun-node:${bun_version}-${node_major}-${distro}"
-    echo "$REGISTRY/bun-node:${bun_minor}-${node_minor}-${distro}"
-    echo "$REGISTRY/bun-node:${bun_minor}-${node_major}-${distro}"
-    echo "$REGISTRY/bun-node:${bun_major}-${node_minor}-${distro}"
-    echo "$REGISTRY/bun-node:${bun_major}-${node_major}-${distro}"
   elif [[ $bun_version == "canary" ]]; then
     echo "$REGISTRY/bun-node:canary-${node_minor}-${distro}"
     echo "$REGISTRY/bun-node:canary-${node_major}-${distro}"
   fi
 
-  # Special nodejs codename tags
-  # Extract the codename for the current version
   local codename=$(echo "${json_data}" | jq -r ".nodejs.\"${node_major}\".name")
   echo "$REGISTRY/bun-node:${bun_version}-${codename}-${distro}"
+
   if [[ $is_canary == false ]]; then
     echo "$REGISTRY/bun-node:latest-${node_version}-${distro}"
     echo "$REGISTRY/bun-node:latest-${node_major}-${distro}"
     echo "$REGISTRY/bun-node:latest-${codename}-${distro}"
   fi
 
-  # Special 'latest' tag
-  local is_latest_lts=false
-  if [[ "$node_major" == "20" ]]; then
-    is_latest_lts=true
-  fi
-  if [[ $is_canary == false && $is_latest_lts == true && $distro == "debian" ]]; then
+  if [[ $is_canary == false && "$node_major" == "20" && $distro == "debian" ]]; then
     echo "$REGISTRY/bun-node:latest"
   fi
 
-  # Special 'node_major-distro' tag
   if [[ $is_canary == false ]]; then
     echo "$REGISTRY/bun-node:${node_major}-${distro}"
   fi
@@ -132,26 +134,22 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
         tag_distro="slim"
       fi
 
-      # Generate tags
       tags=($(generate_tags "$bun_version" "$node_version" "$tag_distro"))
 
-      # Building the image
       node_major=${node_version%%.*}
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
+
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
+        retry docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/base/${node_major}/${distro}" --push --provenance=mode=max
 
-        docker buildx build --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/base/${node_major}/${distro}" --push --provenance=mode=max
-
-        # alpine image with git
         if [ "$distro" == "alpine" ]; then
           log "Building and Tagging Alpine image with Git"
-          docker buildx build --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" "./src/git/${node_major}/${distro}" --push --provenance=mode=max
+          retry docker buildx build --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" "./src/git/${node_major}/${distro}" --push --provenance=mode=max
         fi
       done
 
-      # On success, update the versions.json file
       log "Updating versions.json file"
       bun_tag="latest"
       if [[ $bun_version == *"-canary"* ]]; then

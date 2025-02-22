@@ -42,7 +42,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           pipenv run pytest --cov --cov-report=lcov
-          # bashcov ./test-commit-changes.sh
+          # bashcov ./commit_changes_test.sh
           # ./merge_lcov.sh src merged.lcov
 
       - name: Coverage Badge

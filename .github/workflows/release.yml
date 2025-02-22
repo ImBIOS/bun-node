@@ -80,7 +80,7 @@ jobs:
           timeout_minutes: 60
           max_attempts: 3
           retry_on: error
-          command: ./build-updated.sh
+          command: ./build_updated.sh
         env:
           REGISTRY: ${{ env.REGISTRY }}
           PLATFORMS: ${{ env.PLATFORMS }}
@@ -89,7 +89,7 @@ jobs:
           DISTROS: ${{ env.DISTROS || inputs.distros }}
 
       - name: Commit changes
-        run: ./commit-changes.sh
+        run: ./commit_changes.sh
         env:
           BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD }}
           NODE_VERSIONS_TO_BUILD: ${{ env.NODE_VERSIONS_TO_BUILD }}
