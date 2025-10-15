@@ -12,6 +12,9 @@ def mock_previous_releases_html():
     return """
     <table>
         <tr>
+            <td data-label="Version">Node.js v24.10.0</td>
+        </tr>
+        <tr>
             <td data-label="Version">Node.js v16.20.0</td>
         </tr>
         <tr>
@@ -144,3 +147,31 @@ def test_main_missing_major_version(monkeypatch):
                 mock_print.assert_any_call(
                     "Error: Major version 12 not found in current versions."
                 )
+
+
+def test_nodejs_24_support(monkeypatch):
+    """Test that Node.js 24 is properly supported."""
+    test_args = ["check_nodejs.py", "24"]
+    monkeypatch.setattr("sys.argv", test_args)
+
+    # Mock open to simulate versions.json content with Node.js 24
+    mock_json = json.dumps(
+        {
+            "nodejs": {
+                "24": {"version": "v24.9.0", "name": "v24"},
+            }
+        }
+    )
+
+    with patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
+        with patch("check_nodejs.requests.get") as mock_get:
+            mock_get.return_value.content = mock_previous_releases_html()
+
+            with patch("builtins.print") as mock_print:
+                main()
+
+                # Check that the print statement indicates v24.10.0 is newer than v24.9.0
+                mock_print.assert_called_once_with("24.10.0")
+
+                # Ensure the file was read
+                mock_file.assert_called_once_with("versions.json", encoding="utf-8")

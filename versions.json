@@ -4,6 +4,10 @@
     "canary": "v1.2.22-canary.20250918.1"
   },
   "nodejs": {
+    "24": {
+      "name": "v24",
+      "version": "v24.10.0"
+    },
     "23": {
       "name": "current",
       "version": "v23.11.0"
