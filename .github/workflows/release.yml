@@ -42,7 +42,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@635640504f6d7197d3bb29876a652f671028dc97
       - run: bun install
 
       - name: Check for new releases of nodejs and bun
@@ -61,7 +61,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
-      - uses: nick-fields/retry@v3
+      - uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
         name: Build and push Docker images
         with:
           timeout_minutes: 60
@@ -84,7 +84,7 @@ jobs:
       - name: Pull changes
         run: git pull -r
       - name: Push changes
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
   rerun-failed-jobs:

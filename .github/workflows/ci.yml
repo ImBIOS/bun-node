@@ -35,12 +35,12 @@ jobs:
       #     # ./merge_lcov.sh src merged.lcov
 
       - name: Coverage Badge
-        uses: ImBIOS/lcov-coverage-badge@v1
+        uses: ImBIOS/lcov-coverage-badge@b548b874a74d1c0bb832498745ff98ccb6a81430
         with:
           file: ./coverage.lcov
 
       - name: Verify Changed files
-        uses: tj-actions/verify-changed-files@v20
+        uses: tj-actions/verify-changed-files@4616eed12cee617b16fa9d0ef524f883d2a48a48
         id: verify-changed-files
         with:
           files: "coverage.svg"
@@ -55,7 +55,7 @@ jobs:
 
       - name: Push changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa
         with:
           github_token: ${{ secrets.github_token }}
           branch: ${{ github.ref }}
