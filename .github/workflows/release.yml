@@ -26,7 +26,7 @@ on:
 env:
   REGISTRY: imbios
   PLATFORMS: linux/amd64,linux/arm64
-  NODE_MAJOR_VERSIONS_TO_CHECK: 20,22,24
+  NODE_MAJOR_VERSIONS_TO_CHECK: 20,22,24,25
   NODE_VERSIONS_TO_BUILD: ""
   BUN_TAGS_TO_CHECK: canary,latest
   BUN_VERSIONS_TO_BUILD: ""
@@ -42,28 +42,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install jq
-        run: sudo apt install jq
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pipenv"
-
-      - name: Install pipenv
-        run: pip install pipenv
-
-      - name: Install dependencies using pipenv
-        run: |
-          pipenv install --dev
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
 
       - name: Check for new releases of nodejs and bun
         if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
         run: |
           set -e
-          echo "NODE_VERSIONS_TO_BUILD=$(pipenv run python check_nodejs.py ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
-          echo "BUN_VERSIONS_TO_BUILD=$(pipenv run python check_bun.py ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
+          echo "NODE_VERSIONS_TO_BUILD=$(bun run check-bun-node.ts --node ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
+          echo "BUN_VERSIONS_TO_BUILD=$(bun run check-bun-node.ts --bun ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3

@@ -5,3 +5,4 @@
 *.lcov
 coverage.info
 coverage/
+node_modules/

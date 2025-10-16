@@ -44,7 +44,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \
   && chmod +x /usr/local/bin/bun
 
-FROM node:18-alpine3.20
+FROM node:25-alpine3.20
 
 # Disable the runtime transpiler cache by default inside Docker containers.
 # On ephemeral containers, the cache is not useful
@@ -57,8 +57,6 @@ ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
 
 COPY --from=build /usr/local/bin/bun /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
-ENV PATH "${PATH}:/usr/local/bun-node-fallback-bin"
 
 # Temporarily use the `build`-stage /tmp folder to access the glibc APKs:
 RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
@@ -69,11 +67,6 @@ RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
   && which bun \
   && which bunx \
   && bun --version
-
-# Add git
-RUN apk fix && \
-  apk --no-cache --update add git git-lfs gpg less openssh patch && \
-  git lfs install
 
 WORKDIR /home/bun/app
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

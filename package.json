@@ -1,0 +1,15 @@
+{
+  "name": "bun-node",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/jsdom": "^27.0.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@nodevu/core": "^0.3.0",
+    "jsdom": "^27.0.0"
+  }
+}

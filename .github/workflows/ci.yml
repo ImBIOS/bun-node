@@ -25,25 +25,14 @@ jobs:
       # - name: Set up bashcov
       #   uses: infertux/bashcov/.github/actions/set-up-bashcov@master
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-          cache: "pipenv"
-
       - name: Install lcov
         run: sudo apt-get update && sudo apt-get install -y lcov
 
-      - name: Install dependencies
-        run: |
-          pip install pipenv
-          pipenv install --dev
-
-      - name: Run tests with coverage
-        run: |
-          pipenv run pytest --cov --cov-report=lcov
-          # bashcov ./commit_changes_test.sh
-          # ./merge_lcov.sh src merged.lcov
+      # - name: Run tests with coverage
+      #   run: |
+      #     pipenv run pytest --cov --cov-report=lcov
+      #     # bashcov ./commit_changes_test.sh
+      #     # ./merge_lcov.sh src merged.lcov
 
       - name: Coverage Badge
         uses: ImBIOS/lcov-coverage-badge@v1
