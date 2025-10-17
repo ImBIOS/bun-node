@@ -1,6 +1,13 @@
+#!/usr/bin/env bun
+/**
+ * Usage:
+ *   bun check-bun-node.ts --bun canary,latest
+ *   bun check-bun-node.ts --node 20,22,24,25
+ */
+
 // @ts-expect-error - no types
 import nodevu from "@nodevu/core";
-import { JSDOM } from "jsdom";
+import { $ } from "bun";
 
 const nodevuData = await nodevu({ fetch });
 
@@ -143,50 +150,66 @@ const generateReleaseData = async () => {
   });
 };
 
-async function getNpmVersions(pkgName: string) {
-  const url = `https://www.npmjs.com/package/${pkgName}?activeTab=versions`;
-  const res = await fetch(url);
-  const html = await res.text();
-  const dom = new JSDOM(html);
-  const doc = dom.window.document;
+async function getNpmDistTags(
+  pkgName: string
+): Promise<Record<string, string>> {
+  const url = `https://registry.npmjs.org/${pkgName}`;
+  const response = await fetch(url);
+  if (!response.ok)
+    throw new Error(`Fetch failed for ${pkgName}: ${response.status}`);
+  const data = (await response.json()) as Record<
+    string,
+    string | Record<string, string>
+  >;
+  return data["dist-tags"] as Record<string, string>;
+}
 
-  const rows = Array.from(doc.querySelectorAll("table tbody tr"));
-
-  const latestVersions = { latest: "", canary: "" };
-
-  for (const row of rows) {
-    const versionEl = row.querySelector(
-      'a[class="_132722c7 f5 black-60 lh-copy code"]'
-    );
-    const tagEl = row.querySelector('td[class="ccbecba3 f5 black-60 lh-copy"]');
-
-    if (!versionEl || !tagEl) continue;
-
-    const version = versionEl.textContent.trim();
-    const tag = tagEl.textContent.trim().toLowerCase();
-
-    if (tag === "latest") latestVersions.latest = version;
-    if (tag === "canary") latestVersions.canary = version;
-
-    // Stop early if both found
-    if (latestVersions.latest && latestVersions.canary) break;
+async function getNpmDistTagsFallback(
+  pkgName: string
+): Promise<Record<string, string>> {
+  try {
+    const { stdout } = await $`npm view ${pkgName} dist-tags --json`.quiet();
+    return JSON.parse(stdout.toString().trim());
+  } catch {
+    return {};
   }
+}
 
-  return [latestVersions.latest, latestVersions.canary];
+async function getVersions(
+  pkgName: string,
+  tags: Array<string>
+): Promise<Array<string>> {
+  try {
+    const tagsData = await getNpmDistTags(pkgName);
+    return tags.map((tag) => tagsData[tag] || "").filter(Boolean);
+  } catch {
+    const tagsData = await getNpmDistTagsFallback(pkgName);
+    return tags.map((tag) => tagsData[tag] || "").filter(Boolean);
+  }
 }
 
 /**
  * This will detect, wether --bun or --node is requested
  */
-if (process.argv.includes("--bun")) {
-  getNpmVersions("bun").then((versions) => {
+const main = async () => {
+  if (process.argv.includes("--bun")) {
+    const arg = process.argv.find((a) => a.startsWith("--bun"))!;
+    const tagsArg =
+      arg.split("=")[1] ?? process.argv[process.argv.indexOf("--bun") + 1];
+    const tags = (tagsArg || "latest").split(",");
+    const versions = await getVersions("bun", tags);
     console.log(versions.join(","));
-  });
-} else if (process.argv.includes("--node")) {
-  console.log(
-    (await generateReleaseData())
-      .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
-      .map((release) => release?.versionWithPrefix.replace("v", ""))
-      .join(",")
-  );
-}
+    return;
+  }
+
+  if (process.argv.includes("--node")) {
+    console.log(
+      (await generateReleaseData())
+        .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
+        .map((release) => release?.versionWithPrefix.replace("v", ""))
+        .join(",")
+    );
+  }
+};
+
+await main();
