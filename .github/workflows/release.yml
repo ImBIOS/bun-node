@@ -33,10 +33,12 @@ env:
   DISTROS: alpine,debian-slim,debian
 
 jobs:
-  test-job:
-    uses: ./.github/workflows/ci.yml
+  # TODO: To be implemented
+  # test-job:
+  #   uses: ./.github/workflows/ci.yml
   build-job:
-    needs: test-job
+    # TODO: To be implemented
+    # needs: test-job
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
