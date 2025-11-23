@@ -8,10 +8,355 @@
 // @ts-expect-error - no types
 import nodevu from "@nodevu/core";
 import { $ } from "bun";
-import { rm } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const nodevuData = await nodevu({ fetch });
+
+const DEBIAN_TEMPLATE = (major: number) => `FROM debian:bookworm-slim AS build
+
+# https://github.com/oven-sh/bun/releases
+ARG BUN_VERSION=latest
+
+# Node.js includes python3 for node-gyp, see https://github.com/oven-sh/bun/issues/9807
+# Though, not on slim and alpine images.
+RUN apt-get update -qq \\
+  && apt-get install -qq --no-install-recommends \\
+  ca-certificates \\
+  curl \\
+  dirmngr \\
+  gpg \\
+  gpg-agent \\
+  unzip \\
+  python3 \\
+  && apt-get clean \\
+  && rm -rf /var/lib/apt/lists/* \\
+  && arch="$(dpkg --print-architecture)" \\
+  && case "\${arch##*-}" in \\
+  amd64) build="x64-baseline";; \\
+  arm64) build="aarch64";; \\
+  *) echo "error: unsupported architecture: $arch"; exit 1 ;; \\
+  esac \\
+  && version="$BUN_VERSION" \\
+  && case "$version" in \\
+  latest | canary | bun-v*) tag="$version"; ;; \\
+  v*)                       tag="bun-$version"; ;; \\
+  *)                        tag="bun-v$version"; ;; \\
+  esac \\
+  && case "$tag" in \\
+  latest) release="latest/download"; ;; \\
+  *)      release="download/$tag"; ;; \\
+  esac \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  || (echo "error: failed to download: $tag" && exit 1) \\
+  && for key in \\
+  "F3DCC08A8572C0749B3E18888EAB4D40A7B22B59" \\
+  ; do \\
+  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \\
+  || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \\
+  done \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && grep " bun-linux-$build.zip\\$" SHASUMS256.txt | sha256sum -c - \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && unzip "bun-linux-$build.zip" \\
+  && mv "bun-linux-$build/bun" /usr/local/bin/bun \\
+  && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \\
+  && chmod +x /usr/local/bin/bun
+
+FROM node:${major}-bookworm
+
+COPY docker-entrypoint.sh /usr/local/bin
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
+ENV PATH "\${PATH}:/usr/local/bun-node-fallback-bin"
+
+# Disable the runtime transpiler cache by default inside Docker containers.
+# On ephemeral containers, the cache is not useful
+ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=\${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
+
+# Ensure \`bun install -g\` works
+ARG BUN_INSTALL_BIN=/usr/local/bin
+ENV BUN_INSTALL_BIN=\${BUN_INSTALL_BIN}
+
+RUN groupadd bun \\
+  --gid 1001 \\
+  && useradd bun \\
+  --uid 1001 \\
+  --gid bun \\
+  --shell /bin/sh \\
+  --create-home \\
+  && ln -s /usr/local/bin/bun /usr/local/bin/bunx \\
+  && which bun \\
+  && which bunx \\
+  && bun --version
+
+WORKDIR /home/bun/app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/bun"]
+`;
+
+const SLIM_TEMPLATE = (major: number) => `FROM debian:bookworm-slim AS build
+
+# https://github.com/oven-sh/bun/releases
+ARG BUN_VERSION=latest
+
+RUN apt-get update -qq \\
+  && apt-get install -qq --no-install-recommends \\
+  ca-certificates \\
+  curl \\
+  dirmngr \\
+  gpg \\
+  gpg-agent \\
+  unzip \\
+  && apt-get clean \\
+  && rm -rf /var/lib/apt/lists/* \\
+  && arch="$(dpkg --print-architecture)" \\
+  && case "\${arch##*-}" in \\
+  amd64) build="x64-baseline";; \\
+  arm64) build="aarch64";; \\
+  *) echo "error: unsupported architecture: $arch"; exit 1 ;; \\
+  esac \\
+  && version="$BUN_VERSION" \\
+  && case "$version" in \\
+  latest | canary | bun-v*) tag="$version"; ;; \\
+  v*)                       tag="bun-$version"; ;; \\
+  *)                        tag="bun-v$version"; ;; \\
+  esac \\
+  && case "$tag" in \\
+  latest) release="latest/download"; ;; \\
+  *)      release="download/$tag"; ;; \\
+  esac \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  || (echo "error: failed to download: $tag" && exit 1) \\
+  && for key in \\
+  "F3DCC08A8572C0749B3E18888EAB4D40A7B22B59" \\
+  ; do \\
+  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \\
+  || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \\
+  done \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && grep " bun-linux-$build.zip\\$" SHASUMS256.txt | sha256sum -c - \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && unzip "bun-linux-$build.zip" \\
+  && mv "bun-linux-$build/bun" /usr/local/bin/bun \\
+  && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \\
+  && chmod +x /usr/local/bin/bun \\
+  && which bun \\
+  && bun --version
+
+FROM node:${major}-bookworm-slim
+
+# Disable the runtime transpiler cache by default inside Docker containers.
+# On ephemeral containers, the cache is not useful
+ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=\${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
+
+# Ensure \`bun install -g\` works
+ARG BUN_INSTALL_BIN=/usr/local/bin
+ENV BUN_INSTALL_BIN=\${BUN_INSTALL_BIN}
+
+COPY docker-entrypoint.sh /usr/local/bin
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
+ENV PATH "\${PATH}:/usr/local/bun-node-fallback-bin"
+
+RUN groupadd bun \\
+  --gid 1001 \\
+  && useradd bun \\
+  --uid 1001 \\
+  --gid bun \\
+  --shell /bin/sh \\
+  --create-home \\
+  && ln -s /usr/local/bin/bun /usr/local/bin/bunx \\
+  && which bun \\
+  && which bunx \\
+  && bun --version
+
+WORKDIR /home/bun/app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/bun"]
+`;
+
+const ALPINE_TEMPLATE = (major: number, alpineVer: string) => `FROM alpine:${alpineVer} AS build
+
+# https://github.com/oven-sh/bun/releases
+ARG BUN_VERSION=latest
+
+RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \\
+  && arch="$(apk --print-arch)" \\
+  && case "\${arch##*-}" in \\
+  x86_64) build="x64-musl-baseline";; \\
+  aarch64) build="aarch64-musl";; \\
+  *) echo "error: unsupported architecture: $arch"; exit 1 ;; \\
+  esac \\
+  && version="$BUN_VERSION" \\
+  && case "$version" in \\
+  latest | canary | bun-v*) tag="$version"; ;; \\
+  v*)                       tag="bun-$version"; ;; \\
+  *)                        tag="bun-v$version"; ;; \\
+  esac \\
+  && case "$tag" in \\
+  latest) release="latest/download"; ;; \\
+  *)      release="download/$tag"; ;; \\
+  esac \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  || (echo "error: failed to download: $tag" && exit 1) \\
+  && for key in \\
+  "F3DCC08A8572C0749B3E18888EAB4D40A7B22B59" \\
+  ; do \\
+  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \\
+  || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \\
+  done \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && grep " bun-linux-$build.zip\\$" SHASUMS256.txt | sha256sum -c - \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && unzip "bun-linux-$build.zip" \\
+  && mv "bun-linux-$build/bun" /usr/local/bin/bun \\
+  && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \\
+  && chmod +x /usr/local/bin/bun
+
+FROM node:${major}-alpine${alpineVer}
+
+# Disable the runtime transpiler cache by default inside Docker containers.
+# On ephemeral containers, the cache is not useful
+ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=\${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
+
+# Ensure \`bun install -g\` works
+ARG BUN_INSTALL_BIN=/usr/local/bin
+ENV BUN_INSTALL_BIN=\${BUN_INSTALL_BIN}
+
+COPY --from=build /usr/local/bin/bun /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
+ENV PATH "\${PATH}:/usr/local/bun-node-fallback-bin"
+
+# Temporarily use the \`build\`-stage /tmp folder to access the glibc APKs:
+RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \\
+  addgroup -g 1001 bun \\
+  && adduser -u 1001 -G bun -s /bin/sh -D bun \\
+  && ln -s /usr/local/bin/bun /usr/local/bin/bunx \\
+  && apk add libgcc libstdc++ \\
+  && which bun \\
+  && which bunx \\
+  && bun --version
+
+WORKDIR /home/bun/app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/bun"]
+`;
+
+const GIT_ALPINE_TEMPLATE = (major: number, alpineVer: string) => `FROM alpine:${alpineVer} AS build
+
+# https://github.com/oven-sh/bun/releases
+ARG BUN_VERSION=latest
+
+RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \\
+  && arch="$(apk --print-arch)" \\
+  && case "\${arch##*-}" in \\
+  x86_64) build="x64-musl-baseline";; \\
+  aarch64) build="aarch64-musl";; \\
+  *) echo "error: unsupported architecture: $arch"; exit 1 ;; \\
+  esac \\
+  && version="$BUN_VERSION" \\
+  && case "$version" in \\
+  latest | canary | bun-v*) tag="$version"; ;; \\
+  v*)                       tag="bun-$version"; ;; \\
+  *)                        tag="bun-v$version"; ;; \\
+  esac \\
+  && case "$tag" in \\
+  latest) release="latest/download"; ;; \\
+  *)      release="download/$tag"; ;; \\
+  esac \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  || (echo "error: failed to download: $tag" && exit 1) \\
+  && for key in \\
+  "F3DCC08A8572C0749B3E18888EAB4D40A7B22B59" \\
+  ; do \\
+  gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \\
+  || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \\
+  done \\
+  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \\
+  -fsSLO \\
+  --compressed \\
+  --retry 5 \\
+  && gpg --batch --decrypt --output SHASUMS256.txt SHASUMS256.txt.asc \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && grep " bun-linux-$build.zip\\$" SHASUMS256.txt | sha256sum -c - \\
+  || (echo "error: failed to verify: $tag" && exit 1) \\
+  && unzip "bun-linux-$build.zip" \\
+  && mv "bun-linux-$build/bun" /usr/local/bin/bun \\
+  && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \\
+  && chmod +x /usr/local/bin/bun
+
+FROM node:${major}-alpine${alpineVer}
+
+# Disable the runtime transpiler cache by default inside Docker containers.
+# On ephemeral containers, the cache is not useful
+ARG BUN_RUNTIME_TRANSPILER_CACHE_PATH=0
+ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=\${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
+
+# Ensure \`bun install -g\` works
+ARG BUN_INSTALL_BIN=/usr/local/bin
+ENV BUN_INSTALL_BIN=\${BUN_INSTALL_BIN}
+
+COPY --from=build /usr/local/bin/bun /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
+ENV PATH "\${PATH}:/usr/local/bun-node-fallback-bin"
+
+# Temporarily use the \`build\`-stage /tmp folder to access the glibc APKs:
+RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \\
+  addgroup -g 1001 bun \\
+  && adduser -u 1001 -G bun -s /bin/sh -D bun \\
+  && ln -s /usr/local/bin/bun /usr/local/bin/bunx \\
+  && apk add libgcc libstdc++ \\
+  && which bun \\
+  && which bunx \\
+  && bun --version
+
+# Add git
+RUN apk fix && \\
+  apk --no-cache --update add git git-lfs gpg less openssh patch && \\
+  git lfs install
+
+WORKDIR /home/bun/app
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["/usr/local/bin/bun"]
+`;
+
+
+
+
+  // ... existing logic ...
 
 /**
  * Filters Node.js release data to return only major releases with documented support.
@@ -194,6 +539,95 @@ async function getVersions(
  * This will detect, wether --bun or --node is requested
  */
 
+async function getAlpineVersion(major: number) {
+  try {
+    const response = await fetch(
+      `https://hub.docker.com/v2/repositories/library/node/tags/?page_size=100&name=${major}-alpine`
+    );
+    if (!response.ok) throw new Error("Failed to fetch tags");
+    const data = await response.json() as any;
+    // Find tags that match exactly ${major}-alpine3.x
+    const tags = data.results
+      .map((r: any) => r.name)
+      .filter((name: string) => new RegExp(`^${major}-alpine3\\.\\d+$`).test(name));
+
+    // Sort to find latest (e.g. alpine3.20 > alpine3.19)
+    tags.sort((a: string, b: string) => {
+      const verA = parseFloat(a.split("alpine")[1] || "0");
+      const verB = parseFloat(b.split("alpine")[1] || "0");
+      return verB - verA;
+    });
+
+    if (tags.length > 0 && tags[0]) {
+      // Extract 3.20 from 20-alpine3.20
+      return tags[0].split("alpine")[1] || "3.20";
+    }
+    return "3.20"; // Fallback
+  } catch (e) {
+    console.error("Error fetching Alpine version:", e);
+    return "3.20"; // Fallback
+  }
+}
+
+async function generateDockerfiles() {
+  const releases = await generateReleaseData();
+  const supportedMajors = releases
+    .filter((r) => r && ["Current", "Active LTS", "Maintenance LTS"].includes(r.status))
+    .map((r) => r?.major);
+
+  // Find a source for docker-entrypoint.sh
+  let entrypointSource = "";
+  const glob = new Bun.Glob("**/docker-entrypoint.sh");
+  for await (const file of glob.scan("src")) {
+    entrypointSource = file;
+    break;
+  }
+
+  if (!entrypointSource) {
+    console.error("Could not find docker-entrypoint.sh to copy!");
+    return;
+  }
+  const entrypointContent = await readFile(join("src", entrypointSource));
+
+  for (const major of supportedMajors) {
+    if (!major) continue;
+
+    const alpineVer = await getAlpineVersion(major);
+    console.log(`Generating for Node ${major} (Alpine ${alpineVer})`);
+
+    // src/base
+    const baseDir = join("src/base", major.toString());
+
+    // Debian
+    const debianDir = join(baseDir, "debian");
+    await mkdir(debianDir, { recursive: true });
+    await writeFile(join(debianDir, "dockerfile"), DEBIAN_TEMPLATE(major));
+    await writeFile(join(debianDir, "docker-entrypoint.sh"), entrypointContent);
+    await $`chmod +x ${join(debianDir, "docker-entrypoint.sh")}`;
+
+    // Slim
+    const slimDir = join(baseDir, "debian-slim");
+    await mkdir(slimDir, { recursive: true });
+    await writeFile(join(slimDir, "dockerfile"), SLIM_TEMPLATE(major));
+    await writeFile(join(slimDir, "docker-entrypoint.sh"), entrypointContent);
+    await $`chmod +x ${join(slimDir, "docker-entrypoint.sh")}`;
+
+    // Alpine
+    const alpineDir = join(baseDir, "alpine");
+    await mkdir(alpineDir, { recursive: true });
+    await writeFile(join(alpineDir, "dockerfile"), ALPINE_TEMPLATE(major, alpineVer));
+    await writeFile(join(alpineDir, "docker-entrypoint.sh"), entrypointContent);
+    await $`chmod +x ${join(alpineDir, "docker-entrypoint.sh")}`;
+
+    // src/git
+    const gitDir = join("src/git", major.toString(), "alpine");
+    await mkdir(gitDir, { recursive: true });
+    await writeFile(join(gitDir, "dockerfile"), GIT_ALPINE_TEMPLATE(major, alpineVer));
+    await writeFile(join(gitDir, "docker-entrypoint.sh"), entrypointContent);
+    await $`chmod +x ${join(gitDir, "docker-entrypoint.sh")}`;
+  }
+}
+
 /**
  * Clean up unsupported Node.js version folders in src/base and src/git
  */
@@ -312,6 +746,14 @@ async function generateMatrix() {
 const main = async () => {
   if (process.argv.includes("--cleanup")) {
     await cleanup();
+    if (process.argv.includes("--generate")) {
+        await generateDockerfiles();
+    }
+    return;
+  }
+
+  if (process.argv.includes("--generate")) {
+    await generateDockerfiles();
     return;
   }
 
