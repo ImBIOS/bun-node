@@ -8,6 +8,8 @@
 // @ts-expect-error - no types
 import nodevu from "@nodevu/core";
 import { $ } from "bun";
+import { rm } from "node:fs/promises";
+import { join } from "node:path";
 
 const nodevuData = await nodevu({ fetch });
 
@@ -191,36 +193,164 @@ async function getVersions(
 /**
  * This will detect, wether --bun or --node is requested
  */
+
+/**
+ * Clean up unsupported Node.js version folders in src/base and src/git
+ */
+async function cleanup() {
+  const releases = await generateReleaseData();
+  const supportedMajors = releases
+    .filter((r) => r && ["Current", "Active LTS", "Maintenance LTS"].includes(r.status))
+    .map((r) => r?.major.toString());
+
+  const dirsToClean = ["src/base", "src/git"];
+
+  for (const dir of dirsToClean) {
+    const absoluteDir = join(process.cwd(), dir);
+    const glob = new Bun.Glob("*");
+    for await (const folder of glob.scan({ cwd: absoluteDir, absolute: false, onlyFiles: false })) {
+      if (!supportedMajors.includes(folder)) {
+        await rm(join(absoluteDir, folder), { recursive: true, force: true });
+      }
+    }
+  }
+}
+
+/**
+ * Generate Matrix for GitHub Actions
+ */
+async function generateMatrix() {
+  const releases = (await generateReleaseData()).filter(Boolean);
+  let versionsJson: any = {};
+  try {
+    versionsJson = await Bun.file("versions.json").json();
+  } catch {
+    // If file doesn't exist (first run), assume empty
+  }
+
+  const bunTagsToCheck = (process.env.BUN_TAGS_TO_CHECK || "canary,latest").split(",");
+  const distros = (process.env.DISTROS || "alpine,debian-slim,debian").split(",");
+
+  const matrix: any[] = [];
+
+  // Get Bun versions
+  const bunVersions: string[] = [];
+  for (const tag of bunTagsToCheck) {
+    const versions = await getVersions("bun", [tag]);
+    bunVersions.push(...versions);
+  }
+  // Unique bun versions
+  const uniqueBunVersions = [...new Set(bunVersions)];
+
+  // Filter Node versions
+  const nodeReleases = releases.filter((release) => [20, 22, 24, 25].includes(release?.major || 0));
+
+  for (const bunVersion of uniqueBunVersions) {
+    for (const release of nodeReleases) {
+      if (!release) continue;
+
+      const currentVersion = versionsJson.nodejs?.[release.major]?.version;
+      const bunVersionClean = bunVersion.replace("v", "");
+      const nodeVersionClean = release.versionWithPrefix.replace("v", "");
+
+      // Check if we need to build
+      // We build if:
+      // 1. Node version is new (different from versions.json)
+      // 2. Bun version is new (different from versions.json for that tag) - Wait, versions.json tracks ONE bun version per tag.
+      // If we have multiple bun versions (e.g. canary updates), we should probably build all combinations if they are new?
+      // For simplicity and matching previous logic:
+      // We check if the specific combination needs update?
+      // The previous logic was: if node updated, build all bun. If bun updated, build all node.
+
+      // Let's simplify: We build everything that is "current" according to the inputs,
+      // BUT we can filter if we want.
+      // However, the requirement is "Make the version update of node automatic".
+      // So if Node updates, we build.
+
+      // Let's stick to the plan:
+      // We need to know if we SHOULD build.
+      // If versions.json is missing, build everything.
+      // If versions.json exists:
+      //   - Check if Node version is different.
+      //   - Check if Bun version is different (we need to know which tag this bun version corresponds to, which is hard if we just have the version string).
+
+      // Actually, the previous logic in build_updated.sh was:
+      // IF NODE_VERSIONS_TO_BUILD is set, build those.
+      // IF BUN_VERSIONS_TO_BUILD is set, build those.
+
+      // So here, we should output the FULL matrix of what is CURRENTLY available,
+      // AND let the workflow filter? Or filter here?
+      // Filtering here is better.
+
+      // But wait, if we use matrix, we want to output a list of jobs.
+      // Each job needs: bun_version, node_version, distro.
+
+      // Let's determine what changed.
+      const isNodeChanged = currentVersion !== release.versionWithPrefix;
+
+      // For Bun, we need to compare against the stored version for 'latest' or 'canary'.
+      // This is tricky because we iterate over resolved versions.
+      // Let's assume if the version string is different from what's in versions.json (values of bun object), it's new.
+      const storedBunVersions = Object.values(versionsJson.bun || {});
+      const isBunChanged = !storedBunVersions.includes(`v${bunVersionClean}`);
+
+      if (isNodeChanged || isBunChanged) {
+        for (const distro of distros) {
+           matrix.push({
+             bun_version: bunVersionClean,
+             node_version: nodeVersionClean,
+             distro: distro
+           });
+        }
+      }
+    }
+  }
+
+  console.log(JSON.stringify({ include: matrix }));
+}
+
 const main = async () => {
-  if (process.argv.includes("--bun")) {
-    const arg = process.argv.find((a) => a.startsWith("--bun"))!;
-    const tagsArg =
-      arg.split("=")[1] ?? process.argv[process.argv.indexOf("--bun") + 1];
-    const tags = (tagsArg || "latest").split(",");
-    const versions = await getVersions("bun", tags);
-    console.log(versions.join(","));
+  if (process.argv.includes("--cleanup")) {
+    await cleanup();
     return;
   }
 
+  if (process.argv.includes("--matrix")) {
+    await generateMatrix();
+    return;
+  }
+
+  // ... existing logic for --bun and --node (keep for backward compatibility or remove if unused) ...
+  if (process.argv.includes("--bun")) {
+     // ... (keep existing)
+     const arg = process.argv.find((a) => a.startsWith("--bun"))!;
+     const tagsArg = arg.split("=")[1] ?? process.argv[process.argv.indexOf("--bun") + 1];
+     const tags = (tagsArg || "latest").split(",");
+     const versions = await getVersions("bun", tags);
+     console.log(versions.join(","));
+     return;
+  }
+
   if (process.argv.includes("--node")) {
-    const releases = await generateReleaseData();
-    const versionsJson = await Bun.file("versions.json").json();
+      // ... (keep existing)
+      const releases = await generateReleaseData();
+      const versionsJson = await Bun.file("versions.json").json();
 
-    const newVersions = releases
-      .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
-      .filter((release) => {
-        if (!release) return false;
-        const currentVersion = versionsJson.nodejs[release.major]?.version;
-        // If current version is not set, or is different (assuming we only get newer versions from nodevu), it's an update.
-        // Actually, nodevu returns the LATEST version for that major.
-        // So if versions.json has v20.10.0 and nodevu says v20.11.0, we want to build.
-        // If versions.json has v20.11.0 and nodevu says v20.11.0, we don't want to build.
-        return currentVersion !== release.versionWithPrefix;
-      })
-      .map((release) => release?.versionWithPrefix.replace("v", ""))
-      .join(",");
+      const newVersions = releases
+        .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
+        .filter((release) => {
+          if (!release) return false;
+          const currentVersion = versionsJson.nodejs[release.major]?.version;
+          // If current version is not set, or is different (assuming we only get newer versions from nodevu), it's an update.
+          // Actually, nodevu returns the LATEST version for that major.
+          // So if versions.json has v20.10.0 and nodevu says v20.11.0, we want to build.
+          // If versions.json has v20.11.0 and nodevu says v20.11.0, we don't want to build.
+          return currentVersion !== release.versionWithPrefix;
+        })
+        .map((release) => release?.versionWithPrefix.replace("v", ""))
+        .join(",");
 
-    console.log(newVersions);
+      console.log(newVersions);
   }
 };
 
