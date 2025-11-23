@@ -203,12 +203,24 @@ const main = async () => {
   }
 
   if (process.argv.includes("--node")) {
-    console.log(
-      (await generateReleaseData())
-        .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
-        .map((release) => release?.versionWithPrefix.replace("v", ""))
-        .join(",")
-    );
+    const releases = await generateReleaseData();
+    const versionsJson = await Bun.file("versions.json").json();
+
+    const newVersions = releases
+      .filter((release) => [20, 22, 24, 25].includes(release?.major || 0))
+      .filter((release) => {
+        if (!release) return false;
+        const currentVersion = versionsJson.nodejs[release.major]?.version;
+        // If current version is not set, or is different (assuming we only get newer versions from nodevu), it's an update.
+        // Actually, nodevu returns the LATEST version for that major.
+        // So if versions.json has v20.10.0 and nodevu says v20.11.0, we want to build.
+        // If versions.json has v20.11.0 and nodevu says v20.11.0, we don't want to build.
+        return currentVersion !== release.versionWithPrefix;
+      })
+      .map((release) => release?.versionWithPrefix.replace("v", ""))
+      .join(",");
+
+    console.log(newVersions);
   }
 };
 

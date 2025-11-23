@@ -47,6 +47,11 @@ jobs:
       - uses: oven-sh/setup-bun@635640504f6d7197d3bb29876a652f671028dc97
       - run: bun install
 
+      - name: Download versions.json
+        run: gh release download versions -p versions.json || echo "{}" > versions.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check for new releases of nodejs and bun
         if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
         run: |
@@ -77,18 +82,12 @@ jobs:
           BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD || inputs.bun-versions }}
           DISTROS: ${{ env.DISTROS || inputs.distros }}
 
-      - name: Commit changes
-        run: ./commit_changes.sh
+      - name: Upload versions.json
+        run: |
+          gh release create versions versions.json --title "Versions State" --notes "Stores the current versions.json state" || \
+          gh release upload versions versions.json --clobber
         env:
-          BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD }}
-          NODE_VERSIONS_TO_BUILD: ${{ env.NODE_VERSIONS_TO_BUILD }}
-          DISTROS: ${{ env.DISTROS }}
-      - name: Pull changes
-        run: git pull -r
-      - name: Push changes
-        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   rerun-failed-jobs:
     runs-on: ubuntu-latest
     needs: [build-job]

@@ -43,26 +43,24 @@ IFS=',' read -ra DISTROS <<<"$DISTROS"
 
 # If NODE_VERSIONS_TO_BUILD is empty, but BUN_VERSIONS_TO_BUILD is not,
 # build all versions from versions.json
+# If NODE_VERSIONS_TO_BUILD is empty, but BUN_VERSIONS_TO_BUILD is not,
+# we used to build all versions from versions.json.
+# But for automatic updates, we want to build NOTHING if no Node versions are updated.
 if [ -z "$NODE_VERSIONS_TO_BUILD" ]; then
-  IFS=',' read -ra NODE_MAJOR_VERSIONS <<<"$NODE_MAJOR_VERSIONS_TO_CHECK"
+  log "No Node.js versions to build."
   NODE_VERSIONS=()
-  for node_major_version in "${NODE_MAJOR_VERSIONS[@]}"; do
-    node_version=$(cat versions.json | jq -r ".nodejs.\"${node_major_version}\".version")
-    if [ "$node_version" != "null" ]; then
-      NODE_VERSIONS+=("${node_version//v/}")
-    fi
-  done
 fi
 
 log "Building Node versions: ${NODE_VERSIONS[*]}"
 
 # If BUN_VERSIONS_TO_BUILD is empty, but NODE_VERSIONS_TO_BUILD is not,
 # build all versions from versions.json
+# If BUN_VERSIONS_TO_BUILD is empty, but NODE_VERSIONS_TO_BUILD is not,
+# we used to build all versions from versions.json.
+# But for automatic updates, we want to build NOTHING if no Bun versions are updated.
 if [ -z "$BUN_VERSIONS_TO_BUILD" ]; then
+  log "No Bun versions to build."
   BUN_VERSIONS=()
-  for bun_version in $(cat versions.json | jq -r '.bun | keys[]'); do
-    BUN_VERSIONS+=("${bun_version//v/}")
-  done
 fi
 
 log "Building Bun versions: ${BUN_VERSIONS[*]}"
@@ -116,7 +114,19 @@ generate_tags() {
     echo "$REGISTRY/bun-node:latest-${codename}-${distro}"
   fi
 
-  if [[ $is_canary == false && "$node_major" == "20" && $distro == "debian" ]]; then
+  # Only tag "latest" if this is the latest Node.js version and Debian distro
+  # We need to check if the current node_major is the latest one in versions.json
+  # This is a bit tricky in bash without parsing JSON again, but we can assume the loop order or check against a known latest.
+  # Better approach: The caller knows if it's the latest.
+  # For now, let's restrict it to the highest known major version we support (e.g. 25) or check if it's the last one in the list?
+  # Actually, the issue says "latest tag should be the last tag built".
+  # If we build in order, the last one overwrites 'latest'.
+  # BUT, if we build multiple versions, we might overwrite 'latest' with an older version if the loop isn't sorted or if we build an old version update.
+  # A safer way is to explicitly check if this node version is the "latest" defined in versions.json.
+
+  local latest_node_major=$(echo "${json_data}" | jq -r '.nodejs | keys | map(tonumber) | max')
+
+  if [[ $is_canary == false && "$node_major" == "$latest_node_major" && $distro == "debian" ]]; then
     echo "$REGISTRY/bun-node:latest"
   fi
 
