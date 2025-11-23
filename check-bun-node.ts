@@ -644,7 +644,15 @@ async function cleanup() {
     const glob = new Bun.Glob("*");
     for await (const folder of glob.scan({ cwd: absoluteDir, absolute: false, onlyFiles: false })) {
       if (!supportedMajors.includes(folder)) {
-        await rm(join(absoluteDir, folder), { recursive: true, force: true });
+        const folderPath = join(absoluteDir, folder);
+        try {
+          const stats = await (await import("node:fs/promises")).stat(folderPath);
+          if (stats.isDirectory()) {
+            await rm(folderPath, { recursive: true, force: true });
+          }
+        } catch (e) {
+          // Ignore errors (e.g., file does not exist)
+        }
       }
     }
   }
