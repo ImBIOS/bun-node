@@ -66,7 +66,7 @@ jobs:
       - uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
         name: Build and push Docker images
         with:
-          timeout_minutes: 60
+          timeout_minutes: 120
           max_attempts: 3
           retry_on: error
           command: ./build_updated.sh
@@ -97,4 +97,4 @@ jobs:
       - name: Rerun failed jobs in the current workflow
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run rerun ${{ github.run_id }} --failed
+        run: gh run rerun ${{ github.run_id }} --repo ${{ github.repository }} --failed
