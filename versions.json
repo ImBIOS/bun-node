@@ -6,7 +6,7 @@
   "nodejs": {
     "25": {
       "name": "current",
-      "version": "v25.5.0"
+      "version": "v25.6.0"
     },
     "24": {
       "name": "krypton",
