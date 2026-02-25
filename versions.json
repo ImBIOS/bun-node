@@ -6,11 +6,11 @@
   "nodejs": {
     "25": {
       "name": "current",
-      "version": "v25.6.1"
+      "version": "v25.7.0"
     },
     "24": {
       "name": "krypton",
-      "version": "v24.13.1"
+      "version": "v24.14.0"
     },
     "22": {
       "name": "jod",
