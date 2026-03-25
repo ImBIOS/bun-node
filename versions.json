@@ -1,24 +1,24 @@
 {
   "bun": {
     "latest": "v1.3.11",
-    "canary": "v1.3.11-canary.20260323.1"
+    "canary": "v1.3.11-canary.20260324.1"
   },
   "nodejs": {
     "25": {
       "name": "current",
-      "version": "v25.8.1"
+      "version": "v25.8.2"
     },
     "24": {
       "name": "krypton",
-      "version": "v24.14.0"
+      "version": "v24.14.1"
     },
     "22": {
       "name": "jod",
-      "version": "v22.22.1"
+      "version": "v22.22.2"
     },
     "20": {
       "name": "iron",
-      "version": "v20.20.1"
+      "version": "v20.20.2"
     }
   }
 }
