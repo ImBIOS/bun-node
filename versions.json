@@ -1,7 +1,7 @@
 {
   "bun": {
     "latest": "v1.3.12",
-    "canary": "v1.3.12-canary.20260415.1"
+    "canary": "v1.3.12-canary.20260416.1"
   },
   "nodejs": {
     "25": {
@@ -10,7 +10,7 @@
     },
     "24": {
       "name": "krypton",
-      "version": "v24.14.1"
+      "version": "v24.15.0"
     },
     "22": {
       "name": "jod",
