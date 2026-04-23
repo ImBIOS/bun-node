@@ -44,7 +44,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - uses: oven-sh/setup-bun@635640504f6d7197d3bb29876a652f671028dc97
+      - uses: oven-sh/setup-bun@ab8cb4e8f89912a29b87e4abc4554f2301648a5c
       - run: bun install
 
       - name: Check for new releases of nodejs and bun
