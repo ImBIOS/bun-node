@@ -140,13 +140,21 @@ for bun_version in "${BUN_VERSIONS[@]}"; do
       log "Building image for Bun version $bun_version, Node version $node_version, Distro $distro"
       image_name="$REGISTRY/bun-node:${bun_version}-${node_version}-${tag_distro}"
 
+      # Pass the exact Bun version as a build arg. Canary versions map to the
+      # floating "canary" GitHub release tag (pinned canary releases are not
+      # published on GitHub), everything else to "bun-v<version>".
+      bun_build_arg="$bun_version"
+      if [[ $bun_version == *"-canary"* ]]; then
+        bun_build_arg="canary"
+      fi
+
       for tag in "${tags[@]}"; do
         log "Tagging $image_name as $tag"
-        retry docker buildx build --sbom=true --provenance=true --platform "$PLATFORMS" -t "$image_name" -t "$tag" "./src/base/${node_major}/${distro}" --push --provenance=mode=max
+        retry docker buildx build --sbom=true --provenance=true --platform "$PLATFORMS" -t "$image_name" -t "$tag" --build-arg BUN_VERSION="$bun_build_arg" "./src/base/${node_major}/${distro}" --push --provenance=mode=max
 
         if [ "$distro" == "alpine" ]; then
           log "Building and Tagging Alpine image with Git"
-          retry docker buildx build --sbom=true --provenance=true --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" "./src/git/${node_major}/${distro}" --push --provenance=mode=max
+          retry docker buildx build --sbom=true --provenance=true --platform "$PLATFORMS" -t "$image_name-git" -t "$tag-git" --build-arg BUN_VERSION="$bun_build_arg" "./src/git/${node_major}/${distro}" --push --provenance=mode=max
         fi
       done
 
