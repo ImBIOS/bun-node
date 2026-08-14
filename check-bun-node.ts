@@ -83,8 +83,9 @@ async function generateReleaseData(): Promise<NodeRelease[]> {
     const versions = Object.values(major.releases);
     if (versions.length === 0) continue;
 
-    const latestVersion = versions.reduce((newest, release) =>
-      compareVersions(release.semver.raw, newest.semver.raw) > 0 ? release : newest
+    const latestVersion = versions.slice(1).reduce(
+      (newest, release) => (compareVersions(release.semver.raw, newest.semver.raw) > 0 ? release : newest),
+      versions[0]!
     );
 
     const status = getNodeReleaseStatus(new Date(), {
