@@ -67,7 +67,11 @@ ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
 COPY docker-entrypoint.sh /usr/local/bin
 COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 
-RUN groupadd bun \
+RUN apt-get update -qq \
+  && apt-get install -qq --no-install-recommends curl \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd bun \
   --gid 1001 \
   && useradd bun \
   --uid 1001 \

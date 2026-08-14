@@ -13,14 +13,8 @@ if [ "${BUN_NODE_TELEMETRY:-1}" != "0" ] && [ "${DO_NOT_TRACK:-0}" != "1" ]; the
     ID_TELEMETRY=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$$-$(date +%s)")
     DAY_TELEMETRY=$(date -u +%F 2>/dev/null || date +%F)
     PAYLOAD_TELEMETRY="{\"v\":1,\"id\":\"$ID_TELEMETRY\",\"bun\":\"$BUN_VERSION_TELEMETRY\",\"node\":\"$NODE_VERSION_TELEMETRY\",\"arch\":\"$ARCH_TELEMETRY\",\"d\":\"$DAY_TELEMETRY\"}"
-    if command -v curl >/dev/null 2>&1; then
-      curl -fsS -m 3 --proto '=https' --proto-redir '=https' -X POST -H "Content-Type: application/json" -d "$PAYLOAD_TELEMETRY" \
-        https://bun-node.imbios.dev/telemetry/ping >/dev/null 2>&1
-    elif command -v wget >/dev/null 2>&1; then
-      wget -q -T 3 -O /dev/null --post-data="$PAYLOAD_TELEMETRY" \
-        --header="Content-Type: application/json" \
-        https://bun-node.imbios.dev/telemetry/ping >/dev/null 2>&1
-    fi
+    curl -fsS -m 3 --proto '=https' --proto-redir '=https' -X POST -H "Content-Type: application/json" -d "$PAYLOAD_TELEMETRY" \
+      https://bun-node.imbios.dev/telemetry/ping >/dev/null 2>&1
   ) &
 fi
 
