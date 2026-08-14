@@ -3,8 +3,6 @@ FROM debian:bookworm-slim AS build
 # https://github.com/oven-sh/bun/releases
 ARG BUN_VERSION=latest
 
-# Node.js includes python3 for node-gyp, see https://github.com/oven-sh/bun/issues/9807
-# Though, not on slim and alpine images.
 RUN apt-get update -qq \
   && apt-get install -qq --no-install-recommends \
   ca-certificates \
@@ -13,7 +11,6 @@ RUN apt-get update -qq \
   gpg \
   gpg-agent \
   unzip \
-  python3 \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && arch="$(dpkg --print-architecture)" \
@@ -32,7 +29,7 @@ RUN apt-get update -qq \
   latest) release="latest/download"; ;; \
   *)      release="download/$tag"; ;; \
   esac \
-  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -43,7 +40,7 @@ RUN apt-get update -qq \
   gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \
   || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \
   done \
-  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -56,12 +53,7 @@ RUN apt-get update -qq \
   && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \
   && chmod +x /usr/local/bin/bun
 
-FROM node:20-bookworm
-
-COPY docker-entrypoint.sh /usr/local/bin
-COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
-RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
-ENV PATH "${PATH}:/usr/local/bun-node-fallback-bin"
+FROM node:__NODE_MAJOR__-bookworm-slim
 
 # Disable the runtime transpiler cache by default inside Docker containers.
 # On ephemeral containers, the cache is not useful
@@ -71,6 +63,9 @@ ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
 # Ensure `bun install -g` works
 ARG BUN_INSTALL_BIN=/usr/local/bin
 ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
+
+COPY docker-entrypoint.sh /usr/local/bin
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 
 RUN groupadd bun \
   --gid 1001 \

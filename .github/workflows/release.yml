@@ -2,59 +2,105 @@ name: Release
 
 on:
   schedule:
-    - cron: "0 0 * * *" # Every day at midnight
+    - cron: "0 0 * * *"
   workflow_dispatch:
     inputs:
       bun-versions:
-        description: "Bun version, comma separated (e.g. 0.0.1,0.0.2,1.0.8-canary.20231104.1)"
+        description: "Bun version, comma separated (e.g. 0.0.1,1.0.8-canary.20231104.1)"
         required: false
         default: ""
       nodejs-version:
-        description: "Node.js version, comma separated (e.g. 14.7.4,17.3.8,18.4.5)"
+        description: "Node.js version, comma separated (e.g. 18.4.5,20.11.0)"
         required: false
         default: ""
       distros:
         description: "Distro, comma separated (e.g. alpine,debian-slim,debian)"
         required: false
         default: ""
-      # TODO: To be implemented
-      # skip-check:
-      #   description: "Skip version check"
-      #   required: false
-      #   default: "true"
 
 env:
   REGISTRY: imbios
   PLATFORMS: linux/amd64,linux/arm64
-  NODE_MAJOR_VERSIONS_TO_CHECK: 20,22,24,25
-  NODE_VERSIONS_TO_BUILD: ""
   BUN_TAGS_TO_CHECK: canary,latest
-  BUN_VERSIONS_TO_BUILD: ""
-  DISTROS: alpine,debian-slim,debian
+  DISTROS: ${{ inputs.distros || 'alpine,debian-slim,debian' }}
+  VERSIONS_RELEASE: versions
+  INPUT_BUN_VERSIONS: ${{ inputs.bun-versions }}
+  INPUT_NODE_VERSIONS: ${{ inputs.nodejs-version }}
 
 jobs:
-  # TODO: To be implemented
-  # test-job:
-  #   uses: ./.github/workflows/ci.yml
-  build-job:
-    # TODO: To be implemented
-    # needs: test-job
+  setup:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@635640504f6d7197d3bb29876a652f671028dc97
-      - run: bun install
+      - run: bun install --frozen-lockfile --ignore-scripts
 
-      - name: Check for new releases of nodejs and bun
-        if: ${{ inputs.nodejs-version == '' && inputs.bun-versions == '' && inputs.distros == '' }}
+      - name: Download version state
         run: |
-          set -e
-          echo "NODE_VERSIONS_TO_BUILD=$(bun run check-bun-node.ts --node ${{ env.NODE_MAJOR_VERSIONS_TO_CHECK }})" >> $GITHUB_ENV
-          echo "BUN_VERSIONS_TO_BUILD=$(bun run check-bun-node.ts --bun ${{ env.BUN_TAGS_TO_CHECK }})" >> $GITHUB_ENV
+          gh release download "${{ env.VERSIONS_RELEASE }}" -p versions.json || echo '{}' > versions.json
+          cat versions.json
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-      - name: Setup Docker Buildx
+      - name: Seed stats cache for the stats site
+        continue-on-error: true
+        env:
+          STATS_SEED: ${{ secrets.BUN_NODE_STATS_SEED }}
+        run: |
+          DOCKER=$(curl -fsS --proto '=https' --tlsv1.2 "https://hub.docker.com/v2/repositories/imbios/bun-node/")
+          TAGS=$(curl -fsS --proto '=https' --tlsv1.2 "https://hub.docker.com/v2/repositories/imbios/bun-node/tags/?page_size=1")
+          GH=$(curl -fsS --proto '=https' --tlsv1.2 "https://api.github.com/repos/ImBIOS/bun-node")
+          jq -n \
+            --argjson d "$DOCKER" \
+            --argjson t "$TAGS" \
+            --argjson g "$GH" \
+            '{docker: {pull_count: $d.pull_count, star_count: $d.star_count, last_updated: $d.last_updated, count: $t.count}, github: {stargazers_count: $g.stargazers_count, forks_count: $g.forks_count, open_issues_count: $g.open_issues_count, pushed_at: $g.pushed_at}}' \
+            > /tmp/stats-seed.json
+          curl -fsS --proto '=https' --tlsv1.2 -X POST \
+            -H "Authorization: Bearer ${STATS_SEED}" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/stats-seed.json \
+            https://bun-node.imbios.dev/internal/seed
+
+      - name: Sync supported Node.js majors
+        run: |
+          bun run check-bun-node.ts --sync --versions versions.json
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add src templates
+            git commit -m "chore: sync Dockerfiles with supported Node.js majors"
+            git push origin main
+          fi
+
+      - name: Generate build matrix
+        id: matrix
+        env:
+          DISTROS: ${{ env.DISTROS }}
+          INPUT_BUN_VERSIONS: ${{ env.INPUT_BUN_VERSIONS }}
+          INPUT_NODE_VERSIONS: ${{ env.INPUT_NODE_VERSIONS }}
+        run: |
+          MATRIX=$(bun run check-bun-node.ts --matrix --versions versions.json)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX"
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    if: ${{ fromJson(needs.setup.outputs.matrix).include[0] != null }}
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Docker Hub
@@ -64,37 +110,107 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
-        name: Build and push Docker images
+        name: Build and push
         with:
-          timeout_minutes: 120
+          timeout_minutes: 90
           max_attempts: 3
           retry_on: error
-          command: ./build_updated.sh
+          command: ./build_single.sh --bun "${{ matrix.bun_version }}" --node "${{ matrix.node_version }}" --node-major "${{ matrix.node_major }}" --codename "${{ matrix.codename }}" --distro "${{ matrix.distro }}" --latest-candidate "${{ matrix.latest_candidate }}"
         env:
           REGISTRY: ${{ env.REGISTRY }}
           PLATFORMS: ${{ env.PLATFORMS }}
-          NODE_VERSIONS_TO_BUILD: ${{ env.NODE_VERSIONS_TO_BUILD || inputs.nodejs-version }}
-          BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD || inputs.bun-versions }}
-          DISTROS: ${{ env.DISTROS || inputs.distros }}
 
-      - name: Commit changes
-        run: ./commit_changes.sh
-        env:
-          BUN_VERSIONS_TO_BUILD: ${{ env.BUN_VERSIONS_TO_BUILD }}
-          NODE_VERSIONS_TO_BUILD: ${{ env.NODE_VERSIONS_TO_BUILD }}
-          DISTROS: ${{ env.DISTROS }}
-      - name: Pull changes
-        run: git pull -r
-      - name: Push changes
-        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa
+      - name: Upload build result
+        uses: actions/upload-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-  rerun-failed-jobs:
+          name: build-success-${{ matrix.node_major }}-${{ matrix.bun_version }}-${{ matrix.distro }}
+          path: build_success.json
+          if-no-files-found: error
+
+  finalize:
+    needs: build
     runs-on: ubuntu-latest
-    needs: [build-job]
-    if: failure()
+    permissions:
+      contents: write
+    if: ${{ needs.build.result == 'success' }}
     steps:
-      - name: Rerun failed jobs in the current workflow
+      - uses: actions/checkout@v5
+
+      - name: Download version state
+        run: |
+          gh release download "${{ env.VERSIONS_RELEASE }}" -p versions.json || echo '{}' > versions.json
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run rerun ${{ github.run_id }} --repo ${{ github.repository }} --failed
+
+      - name: Download build results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-success-*
+          merge-multiple: true
+          path: updates
+
+      - name: Merge version state
+        run: |
+          ls -la updates
+          jq -s 'reduce .[] as $u ({}; . * $u)' versions.json updates/*.json > versions.json.tmp
+          jq 'del(._needs_rebuild)' versions.json.tmp > versions.json
+          rm -f versions.json.tmp
+          cat versions.json
+
+      - name: Point latest at the newest candidate
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+        run: |
+          candidate=$(jq -s 'map(select(.latest_candidate == true)) | .[0]' updates/*.json)
+          if [ "$candidate" != "null" ]; then
+            bun_version=$(echo "$candidate" | jq -r '.bun.latest | sub("^v"; "")')
+            node_version=$(echo "$candidate" | jq -r '.nodejs | to_entries[0].value.version | sub("^v"; "")')
+            docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_TOKEN}"
+            docker buildx imagetools create --tag "${{ env.REGISTRY }}/bun-node:latest" "${{ env.REGISTRY }}/bun-node:${bun_version}-${node_version}-debian"
+          else
+            echo "no latest candidate in this run, skipping"
+          fi
+
+      - name: Upload version state
+        run: |
+          gh release create "${{ env.VERSIONS_RELEASE }}" versions.json --title "Versions State" --notes "" || \
+          gh release upload "${{ env.VERSIONS_RELEASE }}" versions.json --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Write release summary
+        run: |
+          {
+            echo "## Release summary"
+            echo ""
+            echo "Built $(ls updates | wc -l) image combination(s):"
+            echo ""
+            for file in updates/*.json; do
+              bun=$(jq -r '.bun | to_entries[] | "\(.key)=\(.value)"' "$file" | tr '\n' ' ')
+              node=$(jq -r '.nodejs | to_entries[] | "node\(.key)=\(.value.version)"' "$file" | tr '\n' ' ')
+              echo "- $node | $bun"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh release edit "${{ env.VERSIONS_RELEASE }}" --notes "$(cat "$GITHUB_STEP_SUMMARY")"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  rerun-failed-jobs:
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      actions: write
+    if: ${{ failure() && needs.build.result == 'failure' }}
+    steps:
+      - name: Rerun failed build jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          failed=$(gh run view ${{ github.run_id }} --repo ${{ github.repository }} --json jobs \
+            --jq '[.jobs[] | select(.name == "build" and .conclusion == "failure") | .databaseId] | join(" ")')
+          if [ -n "$failed" ]; then
+            for job in $failed; do
+              gh run rerun ${{ github.run_id }} --repo ${{ github.repository }} --job "$job" || true
+            done
+          fi

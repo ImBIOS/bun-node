@@ -1,13 +1,25 @@
-FROM alpine:3.20 AS build
+FROM debian:bookworm-slim AS build
 
 # https://github.com/oven-sh/bun/releases
 ARG BUN_VERSION=latest
 
-RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
-  && arch="$(apk --print-arch)" \
+# Node.js includes python3 for node-gyp, see https://github.com/oven-sh/bun/issues/9807
+# Though, not on slim and alpine images.
+RUN apt-get update -qq \
+  && apt-get install -qq --no-install-recommends \
+  ca-certificates \
+  curl \
+  dirmngr \
+  gpg \
+  gpg-agent \
+  unzip \
+  python3 \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* \
+  && arch="$(dpkg --print-architecture)" \
   && case "${arch##*-}" in \
-  x86_64) build="x64-musl-baseline";; \
-  aarch64) build="aarch64-musl";; \
+  amd64) build="x64-baseline";; \
+  arm64) build="aarch64";; \
   *) echo "error: unsupported architecture: $arch"; exit 1 ;; \
   esac \
   && version="$BUN_VERSION" \
@@ -20,7 +32,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   latest) release="latest/download"; ;; \
   *)      release="download/$tag"; ;; \
   esac \
-  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -31,7 +43,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \
   || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \
   done \
-  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -44,7 +56,10 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \
   && chmod +x /usr/local/bin/bun
 
-FROM node:20-alpine3.20
+FROM node:__NODE_MAJOR__-bookworm
+
+COPY docker-entrypoint.sh /usr/local/bin
+COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 
 # Disable the runtime transpiler cache by default inside Docker containers.
 # On ephemeral containers, the cache is not useful
@@ -55,25 +70,17 @@ ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
 ARG BUN_INSTALL_BIN=/usr/local/bin
 ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
 
-COPY --from=build /usr/local/bin/bun /usr/local/bin/
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN mkdir -p /usr/local/bun-node-fallback-bin && ln -s /usr/local/bin/bun /usr/local/bun-node-fallback-bin/node
-ENV PATH "${PATH}:/usr/local/bun-node-fallback-bin"
-
-# Temporarily use the `build`-stage /tmp folder to access the glibc APKs:
-RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
-  addgroup -g 1001 bun \
-  && adduser -u 1001 -G bun -s /bin/sh -D bun \
+RUN groupadd bun \
+  --gid 1001 \
+  && useradd bun \
+  --uid 1001 \
+  --gid bun \
+  --shell /bin/sh \
+  --create-home \
   && ln -s /usr/local/bin/bun /usr/local/bin/bunx \
-  && apk add libgcc libstdc++ \
   && which bun \
   && which bunx \
   && bun --version
-
-# Add git
-RUN apk fix && \
-  apk --no-cache --update add git git-lfs gpg less openssh patch && \
-  git lfs install
 
 WORKDIR /home/bun/app
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

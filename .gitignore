@@ -6,3 +6,5 @@
 coverage.info
 coverage/
 node_modules/
+.wrangler/
+.cloudflare/

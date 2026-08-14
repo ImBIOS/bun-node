@@ -1,22 +1,13 @@
-FROM debian:bullseye-slim AS build
+FROM alpine:__ALPINE_VERSION__ AS build
 
 # https://github.com/oven-sh/bun/releases
 ARG BUN_VERSION=latest
 
-RUN apt-get update -qq \
-  && apt-get install -qq --no-install-recommends \
-  ca-certificates \
-  curl \
-  dirmngr \
-  gpg \
-  gpg-agent \
-  unzip \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/* \
-  && arch="$(dpkg --print-architecture)" \
+RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
+  && arch="$(apk --print-arch)" \
   && case "${arch##*-}" in \
-  amd64) build="x64-baseline";; \
-  arm64) build="aarch64";; \
+  x86_64) build="x64-musl-baseline";; \
+  aarch64) build="aarch64-musl";; \
   *) echo "error: unsupported architecture: $arch"; exit 1 ;; \
   esac \
   && version="$BUN_VERSION" \
@@ -29,7 +20,7 @@ RUN apt-get update -qq \
   latest) release="latest/download"; ;; \
   *)      release="download/$tag"; ;; \
   esac \
-  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -40,7 +31,7 @@ RUN apt-get update -qq \
   gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \
   || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \
   done \
-  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -51,11 +42,9 @@ RUN apt-get update -qq \
   && unzip "bun-linux-$build.zip" \
   && mv "bun-linux-$build/bun" /usr/local/bin/bun \
   && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \
-  && chmod +x /usr/local/bin/bun \
-  && which bun \
-  && bun --version
+  && chmod +x /usr/local/bin/bun
 
-FROM node:25-bullseye-slim
+FROM node:__NODE_MAJOR__-alpine__ALPINE_VERSION__
 
 # Disable the runtime transpiler cache by default inside Docker containers.
 # On ephemeral containers, the cache is not useful
@@ -66,20 +55,23 @@ ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
 ARG BUN_INSTALL_BIN=/usr/local/bin
 ENV BUN_INSTALL_BIN=${BUN_INSTALL_BIN}
 
-COPY docker-entrypoint.sh /usr/local/bin
-COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
+COPY --from=build /usr/local/bin/bun /usr/local/bin/
+COPY docker-entrypoint.sh /usr/local/bin/
 
-RUN groupadd bun \
-  --gid 1001 \
-  && useradd bun \
-  --uid 1001 \
-  --gid bun \
-  --shell /bin/sh \
-  --create-home \
+# Temporarily use the `build`-stage /tmp folder to access the glibc APKs:
+RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
+  addgroup -g 1001 bun \
+  && adduser -u 1001 -G bun -s /bin/sh -D bun \
   && ln -s /usr/local/bin/bun /usr/local/bin/bunx \
+  && apk add libgcc libstdc++ \
   && which bun \
   && which bunx \
   && bun --version
+
+# Add git
+RUN apk fix && \
+  apk --no-cache --update add git git-lfs gpg less openssh patch && \
+  git lfs install
 
 WORKDIR /home/bun/app
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

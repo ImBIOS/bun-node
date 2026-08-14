@@ -1,4 +1,4 @@
-FROM alpine:3.20 AS build
+FROM alpine:__ALPINE_VERSION__ AS build
 
 # https://github.com/oven-sh/bun/releases
 ARG BUN_VERSION=latest
@@ -20,7 +20,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   latest) release="latest/download"; ;; \
   *)      release="download/$tag"; ;; \
   esac \
-  && curl "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/bun-linux-$build.zip" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -31,7 +31,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "$key" \
   || gpg --batch --keyserver keyserver.ubuntu.com --recv-keys "$key" ; \
   done \
-  && curl "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
+  && curl --proto '=https' --proto-redir '=https' "https://github.com/oven-sh/bun/releases/$release/SHASUMS256.txt.asc" \
   -fsSLO \
   --compressed \
   --retry 5 \
@@ -44,7 +44,7 @@ RUN apk --no-cache add ca-certificates curl dirmngr gpg gpg-agent unzip \
   && rm -f "bun-linux-$build.zip" SHASUMS256.txt.asc SHASUMS256.txt \
   && chmod +x /usr/local/bin/bun
 
-FROM node:25-alpine3.22
+FROM node:__NODE_MAJOR__-alpine__ALPINE_VERSION__
 
 # Disable the runtime transpiler cache by default inside Docker containers.
 # On ephemeral containers, the cache is not useful
@@ -67,11 +67,6 @@ RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
   && which bun \
   && which bunx \
   && bun --version
-
-# Add git
-RUN apk fix && \
-  apk --no-cache --update add git git-lfs gpg less openssh patch && \
-  git lfs install
 
 WORKDIR /home/bun/app
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
