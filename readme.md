@@ -27,6 +27,28 @@ Use node.js as runtime, and bun as package manager, etc. The node.js in this doc
 docker pull imbios/bun-node
 ```
 
+## Telemetry
+
+The image sends **one anonymous ping per container start** to `bun-node.imbios.dev`
+to help understand which versions are actually used. The payload contains only:
+
+- the Bun and Node.js versions in the container
+- the CPU architecture
+- a random id (not persisted, rotated every start)
+
+No IP addresses, hostnames, commands, or user data are collected, and the ping
+fails silently (3s timeout, backgrounded) without affecting startup.
+
+**Opt out** with either:
+
+```bash
+docker run -e BUN_NODE_TELEMETRY=0 imbios/bun-node
+# or
+docker run -e DO_NOT_TRACK=1 imbios/bun-node
+```
+
+Live (public) and owner-only telemetry dashboards live at <https://bun-node.imbios.dev>.
+
 ## Build Types
 
 - **alpine**: Minimal build ideal for smaller footprint

@@ -78,8 +78,9 @@ generate_tags() {
   local bun_minor=${bun_version%.*}
   local is_canary=false
 
-  if [ "$bun_version" == "canary" ]; then
+  if [[ "$bun_version" == *"-canary"* ]]; then
     is_canary=true
+    bun_version="canary"
   fi
 
   echo "$REGISTRY/bun-node:${bun_version}-${node_version}-${distro}"
@@ -115,29 +116,38 @@ fi
 
 log "Building image for Bun version $BUN_VERSION, Node version $NODE_VERSION, Distro $DISTRO"
 image_name="$REGISTRY/bun-node:${BUN_VERSION}-${NODE_VERSION}-${tag_distro}"
-tags=($(generate_tags "$BUN_VERSION" "$NODE_VERSION" "$tag_distro"))
+mapfile -t tags < <(generate_tags "$BUN_VERSION" "$NODE_VERSION" "$tag_distro")
 
+tag_args=()
 for tag in "${tags[@]}"; do
   log "Tagging $image_name as $tag"
+  tag_args+=(-t "$tag")
+done
+
+retry docker buildx build \
+  --sbom=true --provenance=true \
+  --platform "$PLATFORMS" \
+  -t "$image_name" \
+  "${tag_args[@]}" \
+  --build-arg BUN_VERSION="$bun_build_arg" \
+  "./src/base/${NODE_MAJOR}/${DISTRO}" \
+  --push
+
+if [ "$DISTRO" == "alpine" ]; then
+  log "Building and Tagging Alpine image with Git"
+  git_tag_args=()
+  for tag in "${tags[@]}"; do
+    git_tag_args+=(-t "$tag-git")
+  done
   retry docker buildx build \
     --sbom=true --provenance=true \
     --platform "$PLATFORMS" \
-    -t "$image_name" -t "$tag" \
+    -t "$image_name-git" \
+    "${git_tag_args[@]}" \
     --build-arg BUN_VERSION="$bun_build_arg" \
-    "./src/base/${NODE_MAJOR}/${DISTRO}" \
+    "./src/git/${NODE_MAJOR}/alpine" \
     --push
-
-  if [ "$DISTRO" == "alpine" ]; then
-    log "Building and Tagging Alpine image with Git"
-    retry docker buildx build \
-      --sbom=true --provenance=true \
-      --platform "$PLATFORMS" \
-      -t "$image_name-git" -t "$tag-git" \
-      --build-arg BUN_VERSION="$bun_build_arg" \
-      "./src/git/${NODE_MAJOR}/alpine" \
-      --push
-  fi
-done
+fi
 
 cat > build_success.json <<EOF
 {

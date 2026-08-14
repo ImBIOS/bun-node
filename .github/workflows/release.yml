@@ -123,7 +123,7 @@ jobs:
       - name: Upload build result
         uses: actions/upload-artifact@v4
         with:
-          name: build-success-${{ matrix.node_major }}-${{ matrix.bun_version }}-${{ matrix.distro }}
+          name: build-success-${{ matrix.bun_tag }}-${{ matrix.bun_version }}-${{ matrix.node_version }}-${{ matrix.distro }}
           path: build_success.json
           if-no-files-found: error
 
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    if: ${{ needs.build.result == 'success' }}
+    if: ${{ always() && needs.build.result != 'skipped' && needs.build.result != 'cancelled' && !cancelled() }}
     steps:
       - uses: actions/checkout@v5
 
@@ -152,6 +152,10 @@ jobs:
       - name: Merge version state
         run: |
           ls -la updates
+          if [[ -z "$(ls -A updates 2>/dev/null)" ]]; then
+            echo "no successful builds to finalize, skipping"
+            exit 0
+          fi
           jq -s 'reduce .[] as $u ({}; . * $u)' versions.json updates/*.json > versions.json.tmp
           jq 'del(._needs_rebuild)' versions.json.tmp > versions.json
           rm -f versions.json.tmp
@@ -166,7 +170,7 @@ jobs:
           if [ "$candidate" != "null" ]; then
             bun_version=$(echo "$candidate" | jq -r '.bun.latest | sub("^v"; "")')
             node_version=$(echo "$candidate" | jq -r '.nodejs | to_entries[0].value.version | sub("^v"; "")')
-            docker login -u "${DOCKER_USERNAME}" -p "${DOCKER_TOKEN}"
+            echo "${DOCKER_TOKEN}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             docker buildx imagetools create --tag "${{ env.REGISTRY }}/bun-node:latest" "${{ env.REGISTRY }}/bun-node:${bun_version}-${node_version}-debian"
           else
             echo "no latest candidate in this run, skipping"
@@ -201,14 +205,14 @@ jobs:
     needs: [build]
     permissions:
       actions: write
-    if: ${{ failure() && needs.build.result == 'failure' }}
+    if: ${{ failure() && needs.build.result == 'failure' && github.run_attempt < 3 }}
     steps:
       - name: Rerun failed build jobs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           failed=$(gh run view ${{ github.run_id }} --repo ${{ github.repository }} --json jobs \
-            --jq '[.jobs[] | select(.name == "build" and .conclusion == "failure") | .databaseId] | join(" ")')
+            --jq '[.jobs[] | select((.name | startswith("build")) and .conclusion == "failure") | .databaseId] | join(" ")')
           if [ -n "$failed" ]; then
             for job in $failed; do
               gh run rerun ${{ github.run_id }} --repo ${{ github.repository }} --job "$job" || true
