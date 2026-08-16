@@ -92,6 +92,9 @@ Manual maintenance:
 ```sh
 bun install
 
+# pull the current release state (versions.json lives on the GitHub release)
+gh release download versions --pattern versions.json
+
 # check which Bun versions are current
 bun run check-bun-node.ts --bun latest,canary
 
