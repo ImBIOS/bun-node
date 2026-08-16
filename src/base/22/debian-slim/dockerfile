@@ -68,7 +68,7 @@ COPY docker-entrypoint.sh /usr/local/bin
 COPY --from=build /usr/local/bin/bun /usr/local/bin/bun
 
 RUN apt-get update -qq \
-  && apt-get install -qq --no-install-recommends curl \
+  && apt-get install -y -qq --no-install-recommends curl \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd bun \

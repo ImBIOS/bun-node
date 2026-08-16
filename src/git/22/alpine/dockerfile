@@ -63,7 +63,7 @@ RUN --mount=type=bind,from=build,source=/tmp,target=/tmp \
   addgroup -g 1001 bun \
   && adduser -u 1001 -G bun -s /bin/sh -D bun \
   && ln -s /usr/local/bin/bun /usr/local/bin/bunx \
-  && apk add libgcc libstdc++ \
+  && apk add --no-cache curl libgcc libstdc++ \
   && which bun \
   && which bunx \
   && bun --version

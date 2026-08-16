@@ -119,25 +119,38 @@ jobs:
 
       - uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08
         name: Build and push
+        env:
+          REGISTRY: ${{ env.REGISTRY }}
+          PLATFORMS: ${{ env.PLATFORMS }}
+          MATRIX_BUN_VERSION: ${{ matrix.bun_version }}
+          MATRIX_NODE_VERSION: ${{ matrix.node_version }}
+          MATRIX_NODE_MAJOR: ${{ matrix.node_major }}
+          MATRIX_CODENAME: ${{ matrix.codename }}
+          MATRIX_DISTRO: ${{ matrix.distro }}
+          MATRIX_LATEST_CANDIDATE: ${{ matrix.latest_candidate }}
         with:
           timeout_minutes: 90
           max_attempts: 3
           retry_on: error
-          command: ./build_single.sh --bun "${{ matrix.bun_version }}" --node "${{ matrix.node_version }}" --node-major "${{ matrix.node_major }}" --codename "${{ matrix.codename }}" --distro "${{ matrix.distro }}" --latest-candidate "${{ matrix.latest_candidate }}"
-        env:
-          REGISTRY: ${{ env.REGISTRY }}
-          PLATFORMS: ${{ env.PLATFORMS }}
+          command: ./build_single.sh --bun "$MATRIX_BUN_VERSION" --node "$MATRIX_NODE_VERSION" --node-major "$MATRIX_NODE_MAJOR" --codename "$MATRIX_CODENAME" --distro "$MATRIX_DISTRO" --latest-candidate "$MATRIX_LATEST_CANDIDATE"
 
       - name: Name the build result per combination
+        id: name-result
+        env:
+          MATRIX_BUN_TAG: ${{ matrix.bun_tag }}
+          MATRIX_BUN_VERSION: ${{ matrix.bun_version }}
+          MATRIX_NODE_VERSION: ${{ matrix.node_version }}
+          MATRIX_DISTRO: ${{ matrix.distro }}
         run: |
-          mv build_success.json \
-            "build_success-${{ matrix.bun_tag }}-${{ matrix.bun_version }}-${{ matrix.node_version }}-${{ matrix.distro }}.json"
+          RESULT_FILE="build_success-${MATRIX_BUN_TAG}-${MATRIX_BUN_VERSION}-${MATRIX_NODE_VERSION}-${MATRIX_DISTRO}.json"
+          mv build_success.json "$RESULT_FILE"
+          echo "result_file=$RESULT_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Upload build result
         uses: actions/upload-artifact@v4
         with:
           name: build-success-${{ matrix.bun_tag }}-${{ matrix.bun_version }}-${{ matrix.node_version }}-${{ matrix.distro }}
-          path: build_success-*.json
+          path: ${{ steps.name-result.outputs.result_file }}
           if-no-files-found: error
 
   finalize:
