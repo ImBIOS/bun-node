@@ -22,17 +22,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      # - name: Set up bashcov
-      #   uses: infertux/bashcov/.github/actions/set-up-bashcov@master
-
       - name: Install lcov
         run: sudo apt-get update && sudo apt-get install -y lcov
-
-      # - name: Run tests with coverage
-      #   run: |
-      #     pipenv run pytest --cov --cov-report=lcov
-      #     # bashcov ./commit_changes_test.sh
-      #     # ./merge_lcov.sh src merged.lcov
 
       - name: Coverage Badge
         uses: ImBIOS/lcov-coverage-badge@b548b874a74d1c0bb832498745ff98ccb6a81430

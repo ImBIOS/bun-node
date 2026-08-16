@@ -1,0 +1,10 @@
+{
+  "name": "bun-node-stats",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "wrangler": "^4.123.0"
+  }
+}

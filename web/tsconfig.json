@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "lib": ["es2022", "dom"],
+    "types": ["@cloudflare/workers-types"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "target": "es2022",
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["src/index.ts"]
+}
