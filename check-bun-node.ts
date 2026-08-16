@@ -182,12 +182,28 @@ function majorsArg(): number[] {
 const alpineCache = new Map<number, string>();
 const bookwormCache = new Map<number, boolean>();
 
+async function fetchWithTransientRetry(url: string, major: number): Promise<Response | null> {
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(url);
+    if (response.ok || response.status === 404) return response;
+    lastStatus = response.status;
+    if (![429, 500, 502, 503].includes(response.status)) return response;
+    await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
+  }
+  throw new Error(`docker hub request failed for node ${major}: ${lastStatus}`);
+}
+
 async function getDockerNodeTag(major: number, pattern: RegExp): Promise<string | null> {
   const names: string[] = [];
   let next = `https://hub.docker.com/v2/repositories/library/node/tags/?page_size=100&name=${major}-`;
   while (next) {
-    const response = await fetch(next);
-    if (!response.ok) return null;
+    const response = await fetchWithTransientRetry(next, major);
+    if (response === null) return null;
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(`docker hub request failed for node ${major}: ${response.status}`);
+    }
     const data = (await response.json()) as { results: Array<{ name: string }>; next: string | null };
     for (const result of data.results) names.push(result.name);
     next = data.next || "";
@@ -376,78 +392,94 @@ async function generateMatrix(): Promise<void> {
     .split(",")
     .map((d) => d.trim())
     .filter(Boolean);
-
   const bunTags = argOrEnv("--bun", "BUN_TAGS_TO_CHECK", "canary,latest")
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
 
-  const include: Array<Record<string, string | number>> = [];
+  const include =
+    process.env.INPUT_BUN_VERSIONS || process.env.INPUT_NODE_VERSIONS
+      ? await matrixFromForcedInputs(releases, availableReleases, distros)
+      : await matrixFromStateDiff(state, bunTags, availableReleases, distros);
+
+  console.log(JSON.stringify({ include }));
+}
+
+async function matrixFromForcedInputs(
+  releases: NodeRelease[],
+  availableReleases: NodeRelease[],
+  distros: string[]
+): Promise<Array<Record<string, string | number>>> {
   const forcedBun = process.env.INPUT_BUN_VERSIONS || "";
   const forcedNode = process.env.INPUT_NODE_VERSIONS || "";
+  const bunVersions = forcedBun
+    ? forcedBun.split(",").map((v) => v.trim()).filter(Boolean)
+    : (await Promise.all(argOrEnv("--bun", "BUN_TAGS_TO_CHECK", "canary,latest").split(",").map((t) => getVersions("bun", [t.trim()])))).flat();
+  const forcedNodeVersions = forcedNode
+    ? forcedNode.split(",").map((v) => v.trim()).filter(Boolean)
+    : [];
+  const releaseByVersion = new Map(releases.map((r) => [r.version, r]));
+  const releaseByMajor = new Map(releases.map((r) => [r.major, r]));
 
-  if (forcedBun || forcedNode) {
-    const bunVersions = forcedBun
-      ? forcedBun.split(",").map((v) => v.trim()).filter(Boolean)
-      : (await Promise.all(bunTags.map((t) => getVersions("bun", [t])))).flat();
-    const forcedNodeVersions = forcedNode
-      ? forcedNode.split(",").map((v) => v.trim()).filter(Boolean)
-      : [];
-    const releaseByVersion = new Map(releases.map((r) => [r.version, r]));
-
-    for (const bunVersion of bunVersions) {
-      const isCanary = bunVersion.includes("-canary");
-      const tag = isCanary ? "canary" : "latest";
-      const nodeVersions = forcedNodeVersions.length > 0 ? forcedNodeVersions : availableReleases.map((r) => r.version);
-      for (const nodeVersion of nodeVersions) {
-        const release = releaseByVersion.get(nodeVersion);
-        for (const distro of distros) {
-          include.push({
-            bun_tag: tag,
-            bun_version: bunVersion.replace(/^v/, ""),
-            node_major: Number(nodeVersion.split(".")[0]),
-            node_version: nodeVersion,
-            codename: release?.codename || "",
-            distro,
-            latest_candidate: false,
-          });
-        }
-      }
-    }
-  } else {
-    for (const tag of bunTags) {
-      const [version] = await getVersions("bun", [tag]);
-      if (!version) {
-        console.error(`no npm dist-tag ${tag} for bun`);
-        continue;
-      }
-      const stored = state.bun[tag];
-      const bunChanged = stored !== `v${version}`;
-      const maxMajor = Math.max(...availableReleases.map((r) => r.major), 0);
-
-      for (const release of availableReleases) {
-        const storedNode = state.nodejs[String(release.major)]?.version;
-        const nodeChanged = storedNode !== release.versionWithPrefix;
-        const forceRebuild = (state._needs_rebuild || []).includes(String(release.major));
-
-        if (!bunChanged && !nodeChanged && !forceRebuild) continue;
-
-        for (const distro of distros) {
-          include.push({
-            bun_tag: tag,
-            bun_version: version.replace(/^v/, ""),
-            node_major: release.major,
-            node_version: release.version,
-            codename: release.codename,
-            distro,
-            latest_candidate: release.major === maxMajor && distro === "debian" && tag === "latest",
-          });
-        }
+  const include: Array<Record<string, string | number>> = [];
+  for (const bunVersion of bunVersions) {
+    const tag = bunVersion.includes("-canary") ? "canary" : "latest";
+    const nodeVersions = forcedNodeVersions.length > 0 ? forcedNodeVersions : availableReleases.map((r) => r.version);
+    for (const nodeVersion of nodeVersions) {
+      const release = releaseByVersion.get(nodeVersion) ?? releaseByMajor.get(Number(nodeVersion.split(".")[0]));
+      for (const distro of distros) {
+        include.push({
+          bun_tag: tag,
+          bun_version: bunVersion.replace(/^v/, ""),
+          node_major: Number(nodeVersion.split(".")[0]),
+          node_version: nodeVersion,
+          codename: release?.codename || "",
+          distro,
+          latest_candidate: false,
+        });
       }
     }
   }
+  return include;
+}
 
-  console.log(JSON.stringify({ include }));
+async function matrixFromStateDiff(
+  state: VersionsState,
+  bunTags: string[],
+  availableReleases: NodeRelease[],
+  distros: string[]
+): Promise<Array<Record<string, string | number>>> {
+  const include: Array<Record<string, string | number>> = [];
+  const maxMajor = Math.max(...availableReleases.map((r) => r.major), 0);
+
+  for (const tag of bunTags) {
+    const [version] = await getVersions("bun", [tag]);
+    if (!version) {
+      console.error(`no npm dist-tag ${tag} for bun`);
+      continue;
+    }
+    const bunChanged = state.bun[tag] !== `v${version}`;
+
+    for (const release of availableReleases) {
+      const nodeChanged = state.nodejs[String(release.major)]?.version !== release.versionWithPrefix;
+      const forceRebuild = (state._needs_rebuild || []).includes(String(release.major));
+
+      if (!bunChanged && !nodeChanged && !forceRebuild) continue;
+
+      for (const distro of distros) {
+        include.push({
+          bun_tag: tag,
+          bun_version: version.replace(/^v/, ""),
+          node_major: release.major,
+          node_version: release.version,
+          codename: release.codename,
+          distro,
+          latest_candidate: release.major === maxMajor && distro === "debian" && tag === "latest",
+        });
+      }
+    }
+  }
+  return include;
 }
 
 async function main(): Promise<void> {

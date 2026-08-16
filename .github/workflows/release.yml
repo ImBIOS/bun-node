@@ -34,6 +34,7 @@ jobs:
       contents: write
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      sync_sha: ${{ steps.sync.outputs.sync_sha }}
     steps:
       - uses: actions/checkout@v5
 
@@ -68,6 +69,7 @@ jobs:
             https://bun-node.imbios.dev/internal/seed
 
       - name: Sync supported Node.js majors
+        id: sync
         run: |
           bun run check-bun-node.ts --sync --versions versions.json
           if [[ -n "$(git status --porcelain)" ]]; then
@@ -76,6 +78,9 @@ jobs:
             git add src templates
             git commit -m "chore: sync Dockerfiles with supported Node.js majors"
             git push origin main
+            echo "sync_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          else
+            echo "sync_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Generate build matrix
@@ -99,6 +104,9 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.setup.outputs.sync_sha }}
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -120,21 +128,29 @@ jobs:
           REGISTRY: ${{ env.REGISTRY }}
           PLATFORMS: ${{ env.PLATFORMS }}
 
+      - name: Name the build result per combination
+        run: |
+          mv build_success.json \
+            "build_success-${{ matrix.bun_tag }}-${{ matrix.bun_version }}-${{ matrix.node_version }}-${{ matrix.distro }}.json"
+
       - name: Upload build result
         uses: actions/upload-artifact@v4
         with:
           name: build-success-${{ matrix.bun_tag }}-${{ matrix.bun_version }}-${{ matrix.node_version }}-${{ matrix.distro }}
-          path: build_success.json
+          path: build_success-*.json
           if-no-files-found: error
 
   finalize:
-    needs: build
+    needs: [setup, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     if: ${{ always() && needs.build.result != 'skipped' && needs.build.result != 'cancelled' && !cancelled() }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.setup.outputs.sync_sha }}
+          persist-credentials: false
 
       - name: Download version state
         run: |
@@ -150,18 +166,22 @@ jobs:
           path: updates
 
       - name: Merge version state
+        id: merge
         run: |
           ls -la updates
           if [[ -z "$(ls -A updates 2>/dev/null)" ]]; then
             echo "no successful builds to finalize, skipping"
+            echo "updates_found=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "updates_found=true" >> "$GITHUB_OUTPUT"
           jq -s 'reduce .[] as $u ({}; . * $u)' versions.json updates/*.json > versions.json.tmp
           jq 'del(._needs_rebuild)' versions.json.tmp > versions.json
           rm -f versions.json.tmp
           cat versions.json
 
       - name: Point latest at the newest candidate
+        if: ${{ steps.merge.outputs.updates_found == 'true' }}
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
           DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
@@ -177,6 +197,7 @@ jobs:
           fi
 
       - name: Upload version state
+        if: ${{ steps.merge.outputs.updates_found == 'true' }}
         run: |
           gh release create "${{ env.VERSIONS_RELEASE }}" versions.json --title "Versions State" --notes "" || \
           gh release upload "${{ env.VERSIONS_RELEASE }}" versions.json --clobber
@@ -184,6 +205,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Write release summary
+        if: ${{ steps.merge.outputs.updates_found == 'true' }}
         run: |
           {
             echo "## Release summary"

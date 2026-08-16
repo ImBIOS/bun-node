@@ -2,9 +2,12 @@
 set -e
 
 # Anonymous usage telemetry for the imbios/bun-node image.
-# Sends one tiny ping per container start (bun version, node version, arch,
-# random id). No IPs, no hostnames, no user data. Opt out by setting
-# BUN_NODE_TELEMETRY=0 (or DO_NOT_TRACK=1).
+# Sends one tiny ping per container start to https://bun-node.imbios.dev/telemetry/ping
+# with bun version, node version, architecture and a random id. The endpoint
+# sees the container's source IP; nothing else is sent (no hostnames, commands
+# or user data). The random id is retained in KV for up to one hour to dedupe
+# repeated pings. Fails silently and never blocks startup.
+# Opt out by setting BUN_NODE_TELEMETRY=0 (or DO_NOT_TRACK=1).
 if [ "${BUN_NODE_TELEMETRY:-1}" != "0" ] && [ "${DO_NOT_TRACK:-0}" != "1" ]; then
   (
     BUN_VERSION_TELEMETRY=$(bun --version 2>/dev/null || echo unknown)

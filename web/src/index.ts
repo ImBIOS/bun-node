@@ -144,44 +144,69 @@ async function handleTelemetryPing(request: Request, env: Env): Promise<Response
   if (request.method !== "POST") {
     return new Response("method not allowed", { status: 405, headers: { "Content-Type": "text/plain" } });
   }
-  let body: { v?: number; id?: string; bun?: string; node?: string; arch?: string; d?: string };
-  try {
-    body = await request.json();
-  } catch {
+  const body = await parseTelemetryBody(request);
+  if (!body) {
     return new Response("bad request", { status: 400, headers: { "Content-Type": "text/plain" } });
   }
-  const day = typeof body.d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.d) ? body.d : new Date().toISOString().slice(0, 10);
-  const id = typeof body.id === "string" && body.id.length > 0 && body.id.length <= 64 ? body.id : "";
-  const bun = typeof body.bun === "string" ? body.bun.slice(0, 40) : "";
-  const node = typeof body.node === "string" ? body.node.slice(0, 40) : "";
-  const arch = typeof body.arch === "string" ? body.arch.slice(0, 20) : "";
-
-  if (id) {
-    const seen = await env.STATS_KV.get(`telemetry:seen:${id}`).catch(() => null);
-    if (seen) return new Response("ok", { status: 200, headers: { "Content-Type": "text/plain" } });
-    await env.STATS_KV.put(`telemetry:seen:${id}`, "1", { expirationTtl: 3600 }).catch(() => {});
-  }
-
-  const key = `telemetry:${day}`;
-  const current = (await env.STATS_KV.get(key, "json").catch(() => null)) as TelemetryDay | null;
-  if (current && current.count >= 200_000) {
+  if (!(await dedupeTelemetryId(env, body.id))) {
     return new Response("ok", { status: 200, headers: { "Content-Type": "text/plain" } });
   }
+  await aggregateTelemetryDay(env, body);
+  return new Response("ok", { status: 200, headers: { "Content-Type": "text/plain" } });
+}
+
+interface TelemetryBody {
+  id: string;
+  bun: string;
+  node: string;
+  arch: string;
+}
+
+async function parseTelemetryBody(request: Request): Promise<TelemetryBody | null> {
+  let raw: { id?: string; bun?: string; node?: string; arch?: string };
+  try {
+    raw = await request.json();
+  } catch {
+    return null;
+  }
+  return {
+    id: typeof raw.id === "string" && raw.id.length > 0 && raw.id.length <= 64 ? raw.id : "",
+    bun: typeof raw.bun === "string" ? raw.bun.slice(0, 40) : "",
+    node: typeof raw.node === "string" ? raw.node.slice(0, 40) : "",
+    arch: typeof raw.arch === "string" ? raw.arch.slice(0, 20) : "",
+  };
+}
+
+async function dedupeTelemetryId(env: Env, id: string): Promise<boolean> {
+  if (!id) return true;
+  const seen = await env.STATS_KV.get(`telemetry:seen:${id}`).catch(() => null);
+  if (seen) return false;
+  await env.STATS_KV.put(`telemetry:seen:${id}`, "1", { expirationTtl: 3600 }).catch(() => {});
+  return true;
+}
+
+async function aggregateTelemetryDay(env: Env, body: TelemetryBody): Promise<void> {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `telemetry:${day}`;
+  const current = (await env.STATS_KV.get(key, "json").catch(() => null)) as TelemetryDay | null;
+  if (current && current.count >= 200_000) return;
   const next: TelemetryDay = {
     count: (current?.count || 0) + 1,
     byBun: current?.byBun || {},
     byNode: current?.byNode || {},
     byArch: current?.byArch || {},
   };
-  if (bun) next.byBun[bun] = (next.byBun[bun] || 0) + 1;
-  if (node) next.byNode[node] = (next.byNode[node] || 0) + 1;
-  if (arch) next.byArch[arch] = (next.byArch[arch] || 0) + 1;
+  if (body.bun) next.byBun[body.bun] = (next.byBun[body.bun] || 0) + 1;
+  if (body.node) next.byNode[body.node] = (next.byNode[body.node] || 0) + 1;
+  if (body.arch) next.byArch[body.arch] = (next.byArch[body.arch] || 0) + 1;
   await env.STATS_KV.put(key, JSON.stringify(next)).catch(() => {});
-  return new Response("ok", { status: 200, headers: { "Content-Type": "text/plain" } });
 }
 
 async function telemetryTotals(env: Env, days: number): Promise<{ count: number; byNode: Record<string, number>; byBun: Record<string, number>; byArch: Record<string, number>; days: Array<{ date: string; count: number }> }> {
-  const keys = await env.STATS_KV.list({ prefix: "telemetry:", limit: 1000 });
+  const keys = await env.STATS_KV.list({ prefix: "telemetry:", limit: 1000 }).catch(() => null);
+  if (!keys) {
+    return { count: 0, byNode: {}, byBun: {}, byArch: {}, days: [] };
+  }
   const cutoff = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
   const totals = { count: 0, byNode: {} as Record<string, number>, byBun: {} as Record<string, number>, byArch: {} as Record<string, number> };
   const perDay: Array<{ date: string; count: number }> = [];
@@ -218,10 +243,11 @@ async function pullHistory(env: Env): Promise<Array<{ date: string; pulls: numbe
 }
 
 async function pageViews(env: Env): Promise<Record<string, number>> {
-  const keys = await env.STATS_KV.list({ prefix: "views:", limit: 400 });
+  const keys = await env.STATS_KV.list({ prefix: "views:", limit: 400 }).catch(() => null);
+  if (!keys) return {};
   const out: Record<string, number> = {};
   for (const key of keys.keys) {
-    const value = await env.STATS_KV.get(key.name);
+    const value = await env.STATS_KV.get(key.name).catch(() => null);
     out[key.name.replace("views:", "")] = Number(value) || 0;
   }
   return out;
@@ -471,8 +497,8 @@ async function handlePrivate(request: Request, env: Env): Promise<Response> {
 async function countView(env: Env): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const key = `views:${today}`;
-  const current = Number(await env.STATS_KV.get(key)) || 0;
-  await env.STATS_KV.put(key, String(current + 1), { expirationTtl: 60 * 60 * 24 * 400 });
+  const current = Number(await env.STATS_KV.get(key).catch(() => null)) || 0;
+  await env.STATS_KV.put(key, String(current + 1), { expirationTtl: 60 * 60 * 24 * 400 }).catch(() => {});
 }
 
 export default {

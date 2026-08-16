@@ -34,10 +34,12 @@ to help understand which versions are actually used. The payload contains only:
 
 - the Bun and Node.js versions in the container
 - the CPU architecture
-- a random id (not persisted, rotated every start)
+- a random id (rotated every start)
 
-No IP addresses, hostnames, commands, or user data are collected, and the ping
-fails silently (3s timeout, backgrounded) without affecting startup.
+The endpoint sees the container's source IP, and the random id is kept in KV for
+up to one hour to deduplicate repeated pings; no hostnames, commands, or user
+data are sent, and the ping fails silently (3s timeout, backgrounded) without
+affecting startup. The recorded date is the server's UTC date.
 
 **Opt out** with either:
 
