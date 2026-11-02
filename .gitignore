@@ -8,3 +8,7 @@ coverage/
 node_modules/
 .wrangler/
 .cloudflare/
+# Ephemeral CI state: downloaded fresh from the `versions` release every
+# run, never committed. Without this, `git status --porcelain` in the
+# sync step sees it and takes the commit path with nothing staged.
+versions.json

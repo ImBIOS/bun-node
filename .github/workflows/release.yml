@@ -72,11 +72,19 @@ jobs:
         id: sync
         run: |
           bun run check-bun-node.ts --sync --versions versions.json
-          if [[ -n "$(git status --porcelain)" ]]; then
+          # Only src/templates matter: versions.json is downloaded fresh
+          # every run (untracked by design, now gitignored) and must never
+          # trigger the sync-commit path.
+          if [[ -n "$(git status --porcelain -- src templates)" ]]; then
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
             git add src templates
-            git commit -m "chore: sync Dockerfiles with supported Node.js majors"
+            git commit -m "chore: sync Dockerfiles with supported Node.js majors" || {
+              echo "::warning::sync changes vanished between check and commit; continuing without push"
+              echo "sync_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+            git pull --rebase origin main
             git push origin main
             echo "sync_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           else
@@ -239,15 +247,25 @@ jobs:
 
   rerun-failed-jobs:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [setup, build]
     permissions:
       actions: write
-    if: ${{ failure() && needs.build.result == 'failure' && github.run_attempt < 3 }}
+    # Setup failure (e.g. a transient sync/push race) leaves build
+    # skipped with nothing attempted — rerun the whole run once so the
+    # scheduler recovers without human clicks. Build-leg failures are
+    # handled per-leg below. Guarded against loops: run_attempt caps the
+    # chain, and only genuinely failed IDs are ever retried.
+    if: ${{ failure() && github.run_attempt < 3 && (needs.setup.result == 'failure' || needs.build.result == 'failure') }}
     steps:
-      - name: Rerun failed build jobs
+      - name: Rerun failed jobs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "${{ needs.setup.result }}" = "failure" ]; then
+            echo "setup failed; rerunning the full run once"
+            gh run rerun ${{ github.run_id }} --repo ${{ github.repository }} --failed || true
+            exit 0
+          fi
           failed=$(gh run view ${{ github.run_id }} --repo ${{ github.repository }} --json jobs \
             --jq '[.jobs[] | select((.name | startswith("build")) and .conclusion == "failure") | .databaseId] | join(" ")')
           if [ -n "$failed" ]; then
