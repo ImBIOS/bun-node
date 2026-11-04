@@ -52,6 +52,8 @@ interface VersionsState {
   _needs_rebuild?: string[];
 }
 
+type MatrixEntry = Record<string, string | number | boolean>;
+
 const STATUS_KEPT = ["Current", "Active LTS", "Maintenance LTS"];
 
 function getNodeReleaseStatus(
@@ -70,12 +72,11 @@ function getNodeReleaseStatus(
 function getMajorNodeReleases() {
   return Object.entries(nodevuDataTyped).filter(([version, { support }]) => {
     if (!support) return false;
-    if (version.startsWith("v0.") && version !== "v0.12") return false;
-    return true;
+    return !(version.startsWith("v0.") && version !== "v0.12");
   });
 }
 
-async function generateReleaseData(): Promise<NodeRelease[]> {
+function generateReleaseData(): NodeRelease[] {
   const majors = getMajorNodeReleases();
   const releases: NodeRelease[] = [];
 
@@ -175,8 +176,20 @@ function flagValue(flag: string, fallback: string): string {
 }
 
 function majorsArg(): number[] {
-  const value = flagValue("--majors", process.env.NODE_MAJOR_VERSIONS_TO_CHECK || "");
-  return value.split(",").map((m) => Number(m)).filter((m) => !Number.isNaN(m));
+  const argIndex = process.argv.findIndex((arg) => arg === "--majors" || arg.startsWith("--majors="));
+  const value = argIndex === -1
+    ? process.env.NODE_MAJOR_VERSIONS_TO_CHECK || ""
+    : process.argv[argIndex] === "--majors"
+      ? process.argv[argIndex + 1] || ""
+      : process.argv[argIndex]!.slice("--majors=".length);
+  if (argIndex === -1 && value === "") return [];
+
+  const values = value.split(",").map((major) => major.trim());
+  const majors = values.map(Number);
+  if (values.some((major) => !/^\d+$/.test(major)) || majors.some((major) => !Number.isSafeInteger(major) || major <= 0)) {
+    throw new Error("Invalid --majors: expected a comma-separated list of positive integers.");
+  }
+  return majors;
 }
 
 const alpineCache = new Map<number, string>();
@@ -185,11 +198,11 @@ const bookwormCache = new Map<number, boolean>();
 async function fetchWithTransientRetry(url: string, major: number): Promise<Response | null> {
   let lastStatus = 0;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const response = await fetch(url);
+    const response = await fetch(url); // NOSONAR: Retries must run sequentially.
     if (response.ok || response.status === 404) return response;
     lastStatus = response.status;
     if (![429, 500, 502, 503].includes(response.status)) return response;
-    await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt)));
+    await new Promise((r) => setTimeout(r, 1500 * Math.pow(2, attempt))); // NOSONAR: Wait for backoff before retrying.
   }
   throw new Error(`docker hub request failed for node ${major}: ${lastStatus}`);
 }
@@ -198,13 +211,13 @@ async function getDockerNodeTag(major: number, pattern: RegExp): Promise<string 
   const names: string[] = [];
   let next = `https://hub.docker.com/v2/repositories/library/node/tags/?page_size=100&name=${major}-`;
   while (next) {
-    const response = await fetchWithTransientRetry(next, major);
+    const response = await fetchWithTransientRetry(next, major); // NOSONAR: Each page depends on the previous response.
     if (response === null) return null;
     if (response.status === 404) return null;
     if (!response.ok) {
       throw new Error(`docker hub request failed for node ${major}: ${response.status}`);
     }
-    const data = (await response.json()) as { results: Array<{ name: string }>; next: string | null };
+    const data = (await response.json()) as { results: Array<{ name: string }>; next: string | null }; // NOSONAR: Read this page before requesting the next one.
     for (const result of data.results) names.push(result.name);
     next = data.next || "";
   }
@@ -245,10 +258,10 @@ function argOrEnv(flag: string, envName: string, fallback: string): string {
 }
 
 async function resolveSupportedMajors(): Promise<Array<{ major: number; alpine: string }>> {
-  const releases = supportedMajors(await generateReleaseData());
+  const releases = supportedMajors(generateReleaseData());
   const supported: Array<{ major: number; alpine: string }> = [];
   for (const release of releases) {
-    const [alpine, bookworm] = await Promise.all([
+    const [alpine, bookworm] = await Promise.all([ // NOSONAR: Check one major at a time to limit Docker Hub requests.
       getAlpineVersion(release.major),
       hasBookworm(release.major),
     ]);
@@ -271,7 +284,7 @@ async function readTemplates(): Promise<Map<string, string>> {
     "alpine.dockerfile",
     "alpine-git.dockerfile",
   ]) {
-    templates.set(name, await readFile(join("templates", name), "utf8"));
+    templates.set(name, await readFile(join("templates", name), "utf8")); // NOSONAR: Keep template reads sequential.
   }
   return templates;
 }
@@ -280,6 +293,8 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
   const supported = await resolveSupportedMajors();
   const created: number[] = [];
   const updated: number[] = [];
+  const state = await loadVersionsState(versionsFilePath());
+  const releases = generateReleaseData();
 
   const templates = await readTemplates();
   const entrypoint = await readFile(join("templates", "docker-entrypoint.sh"), "utf8");
@@ -317,6 +332,7 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
     if (existingEntrypoint !== entrypoint) {
       await writeFile(join(dir, "docker-entrypoint.sh"), entrypoint);
       await $`chmod +x ${join(dir, "docker-entrypoint.sh")}`;
+      track(major, isNew ? created : updated);
     }
   };
 
@@ -329,11 +345,18 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
     for (const { dir, template } of targets(major)) {
       let isNew = false;
       try {
-        await readFile(join(dir, "dockerfile"));
+        await readFile(join(dir, "dockerfile")); // NOSONAR: Check each target before updating it.
       } catch {
         isNew = true;
       }
-      await ensureDir(dir, template, major, alpine, isNew);
+      await ensureDir(dir, template, major, alpine, isNew); // NOSONAR: Preserve write and change-tracking order.
+    }
+    const release = releases.find((release) => release.major === major)!;
+    // The Dockerfiles use floating major tags: a new Node release changes the
+    // build inputs even when the rendered files are identical. Keep the last
+    // built version in state until the release workflow successfully builds it.
+    if (!created.includes(major) && state.nodejs[String(major)]?.version !== release.versionWithPrefix) {
+      track(major, updated);
     }
   }
 
@@ -341,11 +364,11 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
   if (supported.length > 0) {
     for (const root of ["src/base", "src/git"]) {
       const absoluteDir = join(process.cwd(), root);
-      const entries = await readdir(absoluteDir, { withFileTypes: true }).catch(() => []);
+      const entries = await readdir(absoluteDir, { withFileTypes: true }).catch(() => []); // NOSONAR: Process one source root at a time.
       for (const dirent of entries) {
         if (!dirent.isDirectory()) continue;
         if (supported.some((s) => String(s.major) === dirent.name)) continue;
-        await rm(join(absoluteDir, dirent.name), { recursive: true, force: true });
+        await rm(join(absoluteDir, dirent.name), { recursive: true, force: true }); // NOSONAR: Preserve removal and change-tracking order.
         track(Number(dirent.name), removed);
       }
     }
@@ -368,7 +391,6 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
   );
 
   if (created.length > 0 || updated.length > 0) {
-    const state = await loadVersionsState(versionsFilePath());
     const rebuild = new Set<string>(state._needs_rebuild || []);
     for (const major of [...created, ...updated]) rebuild.add(String(major));
     state._needs_rebuild = [...rebuild];
@@ -379,11 +401,11 @@ async function syncDockerfiles(): Promise<{ created: number[]; updated: number[]
 }
 
 async function generateMatrix(): Promise<void> {
-  const releases = await generateReleaseData();
+  const explicitMajors = majorsArg();
+  const releases = generateReleaseData();
   const state = await loadVersionsState(versionsFilePath());
 
   const supportedMajorsList = await resolveSupportedMajors();
-  const explicitMajors = majorsArg();
   const majors = explicitMajors.length > 0 ? explicitMajors : supportedMajorsList.map((s) => s.major);
   const availableReleases = releases.filter(
     (r) => majors.includes(r.major) && supportedMajorsList.some((s) => s.major === r.major)
@@ -409,7 +431,7 @@ async function matrixFromForcedInputs(
   releases: NodeRelease[],
   availableReleases: NodeRelease[],
   distros: string[]
-): Promise<Array<Record<string, string | number>>> {
+): Promise<MatrixEntry[]> {
   const forcedBun = process.env.INPUT_BUN_VERSIONS || "";
   const forcedNode = process.env.INPUT_NODE_VERSIONS || "";
   const bunVersions = forcedBun
@@ -421,7 +443,7 @@ async function matrixFromForcedInputs(
   const releaseByVersion = new Map(releases.map((r) => [r.version, r]));
   const releaseByMajor = new Map(releases.map((r) => [r.major, r]));
 
-  const include: Array<Record<string, string | number>> = [];
+  const include: MatrixEntry[] = [];
   for (const bunVersion of bunVersions) {
     const tag = bunVersion.includes("-canary") ? "canary" : "latest";
     const nodeVersions = forcedNodeVersions.length > 0 ? forcedNodeVersions : availableReleases.map((r) => r.version);
@@ -448,12 +470,12 @@ async function matrixFromStateDiff(
   bunTags: string[],
   availableReleases: NodeRelease[],
   distros: string[]
-): Promise<Array<Record<string, string | number>>> {
-  const include: Array<Record<string, string | number>> = [];
+): Promise<MatrixEntry[]> {
+  const include: MatrixEntry[] = [];
   const maxMajor = Math.max(...availableReleases.map((r) => r.major), 0);
 
   for (const tag of bunTags) {
-    const [version] = await getVersions("bun", [tag]);
+    const [version] = await getVersions("bun", [tag]); // NOSONAR: Resolve tags sequentially in matrix order.
     if (!version) {
       console.error(`no npm dist-tag ${tag} for bun`);
       continue;
@@ -501,7 +523,7 @@ async function main(): Promise<void> {
   }
 
   if (process.argv.includes("--node")) {
-    const releases = supportedMajors(await generateReleaseData());
+    const releases = supportedMajors(generateReleaseData());
     const filter = majorsArg();
     const state = await loadVersionsState(versionsFilePath());
     const changed = releases
